@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division,\
+       print_function, unicode_literals
+
 from pyramid.config import Configurator
 from sqlalchemy import engine_from_config
 
@@ -14,7 +18,7 @@ def main(global_config, **settings):
     DBSession.configure(bind=engine)
     Base.metadata.bind = engine
     config = Configurator(settings=settings)
-    config.add_static_view('static', '{{project}}:static', cache_max_age=3600)
+    config.add_static_view('static', '{{package}}:static', cache_max_age=3600)
     config.add_route('home', '/')
-    config.scan('{{project}}')
+    config.scan('{{package}}')
     return config.make_wsgi_app()
