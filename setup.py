@@ -38,5 +38,9 @@ setup(name='tet',
       include_package_data=True,
       zip_safe=False,
       test_suite='tet',
+      entry_points = """\
+        [pyramid.scaffold]
+        coolextension=tet.scaffolds:BasicTetTemplate
+      """,
       install_requires=requires,
 )
