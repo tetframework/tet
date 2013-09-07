@@ -42,7 +42,7 @@ _crockford_b32_to_std_b32 = maketrans(
     b"AABBBCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 )
 
-_normalize_crockford_b32 = bytes.maketrans(
+_normalize_crockford_b32 = maketrans(
     b"OIL" + string.ascii_lowercase.encode('UTF-8'),
     b"011" + string.ascii_uppercase.encode('UTF-8')
 )

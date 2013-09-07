@@ -1,4 +1,4 @@
-hekau
-=====
+tet
+===
 
-Ancient Egyptian Magic for the Pyramid Framework
+Unearthly intelligent batteries-included application framework built on Pyramid

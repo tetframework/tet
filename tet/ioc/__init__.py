@@ -39,7 +39,7 @@ def service(interface):
                 get_service_registry(registry)._register_service(ob_instance, interface)
                 registry.registerUtility(ob_instance, interface)
 
-        info = venusian.attach(wrapped, callback, category='hekau.service')
+        info = venusian.attach(wrapped, callback, category='tet.service')
         return wrapped
 
     return service_decorator
@@ -64,7 +64,7 @@ class BaseService(object):
 
 
 def scan_services(config, *a, **kw):
-    kw['categories'] = ('hekau.service',)
+    kw['categories'] = ('tet.service',)
     return config.scan(*a, **kw)
 
 

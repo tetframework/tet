@@ -2,7 +2,7 @@ import sqlalchemy as sa
 from sqlalchemy import orm as orm
 from sqlalchemy.ext import declarative
 
-from hekau.util.crypt import crypt, verify
+from ..util.crypt import crypt, verify
 
 class UserPasswordMixin(object):
     _password = sa.Column('password', sa.Unicode, nullable=True)
