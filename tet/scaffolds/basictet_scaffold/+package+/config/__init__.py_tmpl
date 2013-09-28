@@ -1,4 +1,4 @@
- -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import, division,\
        print_function, unicode_literals
 
@@ -20,6 +20,7 @@ class AppFactory(TetAppFactory):
         Base.metadata.bind = engine
 
     def configure_routes(self, config):
+        config.include('pyramid_chameleon')
         config.add_static_view('static', '{{package}}:static', cache_max_age=3600)
         config.add_route('home', '/')
 

@@ -21,6 +21,7 @@ requires = [
     'zope.sqlalchemy',
     'waitress',
     'tet',
+    'pyramid_chameleon',
     ]
 
 setup(name='{{project}}',
