@@ -5,6 +5,9 @@ from __future__ import absolute_import, division,\
 from pyramid.config import *
 
 class TetAppFactory(object):
+    scan = None
+    includes = None
+
     def __init__(self, *args, **kwargs):
         super(TetAppFactory, self).__init__(*args, **kwargs)
 
@@ -35,7 +38,14 @@ class TetAppFactory(object):
     def do_scan(self):
         self.config.scan(self.scan)
 
+
+    def do_include(self):
+        for i in self.includes:
+            self.config.include(i)
+
     def construct_app(self):
+        if self.includes:
+            self.do_include()
         if self.scan:
             self.do_scan()
 
