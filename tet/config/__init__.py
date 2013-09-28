@@ -38,7 +38,6 @@ class TetAppFactory(object):
     def do_scan(self):
         self.config.scan(self.scan)
 
-
     def do_include(self):
         for i in self.includes:
             self.config.include(i)
