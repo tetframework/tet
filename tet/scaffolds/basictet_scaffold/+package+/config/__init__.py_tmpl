@@ -13,6 +13,9 @@ from ..models import (
 
 class AppFactory(TetAppFactory):
     scan = '{{package}}'
+    includes = [
+        'pyramid_chameleon'  # template engine: chameleon
+    ]
 
     def configure_db(self, config):
         engine = engine_from_config(self.settings, 'sqlalchemy.')
@@ -20,7 +23,6 @@ class AppFactory(TetAppFactory):
         Base.metadata.bind = engine
 
     def configure_routes(self, config):
-        config.include('pyramid_chameleon')
         config.add_static_view('static', '{{package}}:static', cache_max_age=3600)
         config.add_route('home', '/')
 
