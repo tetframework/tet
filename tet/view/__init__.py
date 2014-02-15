@@ -4,6 +4,9 @@ from __future__ import absolute_import, division,\
 
 from pyramid.view import *
 from functools import wraps
+from inspect import isclass
+
+
 _pyramid_view_config = view_config
 
 class view_config(_pyramid_view_config):
@@ -59,7 +62,7 @@ class BaseController(object):
                 pass
 
         child_controller = getattr(self, name, None)
-        if isinstance(child_controller, BaseController):
+        if isclass(child_controller) and issubclass(child_controller, BaseController):
             child = child_controller(self.request)
             child.__parent__ = self
             child.__name__ = name
