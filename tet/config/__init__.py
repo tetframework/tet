@@ -51,7 +51,7 @@ class TetAppFactory(object):
         self.pre_configure_app(self.config)
         self.configure_app(self.config)
         self.post_configure_app(self.config)
-        self.wrap_app(self.config.make_wsgi_app())
+        return self.wrap_app(self.config.make_wsgi_app())
 
     def wrap_app(self, app):
         return app
