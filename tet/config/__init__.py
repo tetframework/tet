@@ -45,12 +45,14 @@ class TetAppFactory(object):
     def construct_app(self):
         if self.includes:
             self.do_include()
-        if self.scan:
-            self.do_scan()
 
         self.pre_configure_app(self.config)
         self.configure_app(self.config)
         self.post_configure_app(self.config)
+
+        if self.scan:
+            self.do_scan()
+
         return self.wrap_app(self.config.make_wsgi_app())
 
     def wrap_app(self, app):
