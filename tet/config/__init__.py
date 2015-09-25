@@ -3,12 +3,25 @@ from __future__ import absolute_import, division,\
        print_function, unicode_literals
 
 from pyramid.config import *
+from tet.decorators import deprecated
+
 
 class TetAppFactory(object):
     scan = None
     includes = None
+    i18n = True
+
+    def __new__(cls, global_config, **settings):
+        instance = cls.instantiate()
+        instance.init_app_factory(global_config, settings)
+        return instance.construct_app()
+
+    @classmethod
+    def instantiate(cls):
+        return super(TetAppFactory, cls).__new__(cls)
 
     def __init__(self, *args, **kwargs):
+        print(args, kwargs)
         super(TetAppFactory, self).__init__(*args, **kwargs)
 
     def _dummy(self, *a, **kw):
@@ -58,11 +71,7 @@ class TetAppFactory(object):
     def wrap_app(self, app):
         return app
 
-    def __call__(self, global_config, **settings):
-        self.init_app_factory(global_config, settings)
-        return self.construct_app()
-
     @classmethod
+    @deprecated
     def main(cls, global_config, **settings):
-        instance = cls()
-        return instance(global_config, **settings)
+        return cls(global_config, **settings)
