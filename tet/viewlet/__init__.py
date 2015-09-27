@@ -7,6 +7,7 @@ from zope.interface import (
     Interface
 )
 
+
 def render_fragment(tpl, dct, system):
     renderer = get_renderer(tpl)
     return renderer.fragment(tpl, dct, system)
@@ -16,7 +17,7 @@ def get_request(self_or_request):
     if hasattr(self_or_request, 'request'):
         return self_or_request.request
 
-    return request
+    return self_or_request
 
 
 class IBeforeViewletRender(IDict):

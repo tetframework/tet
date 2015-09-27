@@ -15,6 +15,7 @@ requires = """
     passlib
     six
     sqlalchemy
+    pyramid_services
 """.split()
 
 setup(name='tet',

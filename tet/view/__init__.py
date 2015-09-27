@@ -6,6 +6,7 @@ from pyramid.view import *
 from functools import wraps
 from inspect import isclass
 
+from tet.services import RequestScopedBaseService
 
 _pyramid_view_config = view_config
 
@@ -69,3 +70,9 @@ class BaseController(object):
             return child
 
         raise KeyError("Child not found: %s" % name)
+
+
+class ServiceViews(RequestScopedBaseService):
+    def __init__(self, context, request):
+        super().__init__(request=request)
+        self.context = context
