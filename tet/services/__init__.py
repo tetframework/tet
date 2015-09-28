@@ -2,6 +2,8 @@
 from __future__ import absolute_import, division,\
        print_function, unicode_literals
 
+from backports.typing import TypeVar, Any
+
 from pyramid.decorator import reify
 import venusian
 import re
@@ -47,10 +49,8 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
             registry = scanner.config.registry
 
             if scope == 'global':
-                print(ob, scanner, name)
                 # register only once
-                if not isinstance(registry.queryUtility(interface), ob):
-                    print(ob)
+                if registry.queryUtility(interface, name=name) is None:
                     ob_instance = ob(registry=registry)
                     get_service_registry(registry)._register_service(ob_instance, interface)
                     registry.registerUtility(ob_instance, interface)
@@ -70,7 +70,7 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
     return service_decorator
 
 
-def autowired(interface=Interface, name=''):
+def autowired(interface=Interface, name: str='') -> Any:
     @reify
     def getter(self):
         if hasattr(self, 'request'):
@@ -108,5 +108,6 @@ def scan_services(config, *a, **kw):
 
 
 def includeme(config):
+    config.include('pyramid_services')
     config.add_directive('scan_services', scan_services)
     config.registry.services = ServiceRegistry()

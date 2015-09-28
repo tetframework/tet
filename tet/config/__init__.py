@@ -21,7 +21,6 @@ class TetAppFactory(object):
         return super(TetAppFactory, cls).__new__(cls)
 
     def __init__(self, *args, **kwargs):
-        print(args, kwargs)
         super(TetAppFactory, self).__init__(*args, **kwargs)
 
     def _dummy(self, *a, **kw):
@@ -31,6 +30,11 @@ class TetAppFactory(object):
         self.settings = settings
         self.global_config = global_config
         self.config = self.make_configurator()
+
+        self.do_default_includes()
+
+    def do_default_includes(self):
+        self.config.include('tet.services')
 
     def make_configurator(self):
         return Configurator(settings=self.settings)
