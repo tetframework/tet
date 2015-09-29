@@ -53,7 +53,7 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
                 if registry.queryUtility(interface, name=name) is None:
                     ob_instance = ob(registry=registry)
                     get_service_registry(registry)._register_service(ob_instance, interface)
-                    registry.registerUtility(ob_instance, interface)
+                    registry.registerUtility(ob_instance, interface, name=service_name)
                     scanner.config.register_service(ob_instance, interface, Interface, service_name)
 
             else:
