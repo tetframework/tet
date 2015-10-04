@@ -4,12 +4,14 @@ from __future__ import absolute_import, division,\
 
 from pyramid.config import *
 from tet.decorators import deprecated
+from tet.i18n import configure_i18n
 
 
 class TetAppFactory(object):
     scan = None
     includes = None
     i18n = True
+    default_i18n_domain = None
 
     def __new__(cls, global_config, **settings):
         instance = cls.instantiate()
@@ -35,6 +37,8 @@ class TetAppFactory(object):
 
     def do_default_includes(self):
         self.config.include('tet.services')
+        if self.i18n:
+            configure_i18n(self.config, self.default_i18n_domain)
 
     def make_configurator(self):
         return Configurator(settings=self.settings)

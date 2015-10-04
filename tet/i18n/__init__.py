@@ -15,14 +15,11 @@ def add_renderer_globals(event):
     event['localizer'] = request.localizer
 
 
-tsf = TranslationStringFactory('pyramid_i18n_howto')
-
-
 def configure_i18n(config: Configurator, default_domain: str):
     config.add_subscriber(add_renderer_globals,
                           'pyramid.events.BeforeRender')
 
-    config.registry.tsf = TranslationStringFactory(default_domain)
+    config.registry.tsf = tsf = TranslationStringFactory(default_domain)
 
     def translate(request):
         localizer = request.localizer
@@ -39,8 +36,8 @@ def configure_i18n(config: Configurator, default_domain: str):
         localizer = request.localizer
 
         def auto_pluralize(singular, plural, n, domain=None, mapping=None):
-            if isinstance(string, str):
-                string = tsf(string)
+            if isinstance(singular, str):
+                singular = tsf(singular)
 
             return localizer.pluralize(singular, plural, n, domain=domain, mapping=mapping)
 
