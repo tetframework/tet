@@ -2,13 +2,14 @@
 from __future__ import absolute_import, division,\
        print_function, unicode_literals
 
-from pyramid.view import *
-from functools import wraps
 from inspect import isclass
 
+from pyramid.request import Request
+from pyramid.view import *
 from tet.services import RequestScopedBaseService
 
 _pyramid_view_config = view_config
+
 
 class view_config(_pyramid_view_config):
     def __init__(self, **settings):
@@ -73,6 +74,6 @@ class BaseController(object):
 
 
 class ServiceViews(RequestScopedBaseService):
-    def __init__(self, context, request):
+    def __init__(self, context, request: Request):
         super().__init__(request=request)
         self.context = context

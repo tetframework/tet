@@ -92,10 +92,11 @@ class BaseService(object):
             raise TypeError("Registry to the base business must be provided")
 
 
-class RequestScopedBaseService(object):
+class RequestScopedBaseService(BaseService):
     def __init__(self, **kw):
         try:
             self.request = kw.pop('request')
+            kw['registry'] = self.request.registry
             super(RequestScopedBaseService, self).__init__(**kw)
 
         except KeyError:
