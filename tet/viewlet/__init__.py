@@ -29,7 +29,7 @@ class IBeforeViewletRender(IDict):
 @implementer(IBeforeViewletRender)
 class BeforeViewletRender(dict):
     def __init__(self, system, rendering_val=None):
-        dict.__init__(self, system)
+        super(BeforeViewletRender, self).__init__(system)
         self.rendering_val = rendering_val
 
 

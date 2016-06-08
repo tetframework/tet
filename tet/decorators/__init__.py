@@ -1,8 +1,10 @@
 import warnings
 import types
 
+
 def _qualname(func):
     return getattr(func, '__qualname__', func.__name__)
+
 
 def deprecated(func):
     """This is a decorator which can be used to mark functions

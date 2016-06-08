@@ -93,6 +93,10 @@ class BaseService(object):
 
 
 class RequestScopedBaseService(BaseService):
+    """
+    :type request: pyramid.request.Request
+    """
+
     def __init__(self, **kw):
         try:
             self.request = kw.pop('request')
