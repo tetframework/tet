@@ -35,7 +35,7 @@ def configure_i18n(config: Configurator, default_domain: str):
     def pluralize(request):
         localizer = request.localizer
 
-        def auto_pluralize(singular, plural, n, domain=None, mapping=None, context=None):
+        def auto_pluralize(singular, plural, n, domain=default_domain, mapping=None, context=None):
             if isinstance(singular, str):
                 singular = tsf(singular, context=context)
 
