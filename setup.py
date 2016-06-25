@@ -16,7 +16,7 @@ requires = """
 """.split()
 
 setup(name='tet',
-      version='0.1',
+      version='0.2',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
