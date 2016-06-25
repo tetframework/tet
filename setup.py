@@ -16,6 +16,7 @@ requires = """
     six
     sqlalchemy
     pyramid_services
+    backports.typing
 """.split()
 
 setup(name='tet',
@@ -27,17 +28,17 @@ setup(name='tet',
           "Framework :: Pyramid",
           "Intended Audience :: Developers",
           "License :: OSI Approved :: Python Software Foundation License",
-          "Programming Language :: Python :: 2.6",
-          "Programming Language :: Python :: 2.7",
           "Programming Language :: Python :: 3.3",
+          "Programming Language :: Python :: 3.4",
+          "Programming Language :: Python :: 3.5",
           "Topic :: Internet :: WWW/HTTP :: WSGI",
           "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
           "Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware",
           "Topic :: Software Development :: Libraries :: Application Frameworks"
       ],
       author='Antti Haapala',
-      author_email='antti@haapala.name',
-      url='http://anttipatterns.com',
+      author_email='antti.haapala@anttipatterns.com',
+      url='http://www.anttipatterns.com',
       keywords='web wsgi bfg pylons pyramid',
       packages=find_packages(),
       include_package_data=True,
