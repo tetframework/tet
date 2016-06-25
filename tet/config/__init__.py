@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division,\
-       print_function, unicode_literals
-
 from pyramid.config import *
 from tet.decorators import deprecated
 from tet.i18n import configure_i18n
