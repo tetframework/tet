@@ -1,9 +1,9 @@
+from pyramid.interfaces import ISessionFactory
 from zope.interface import implementer
-from pyramid.session import *
 
 
 @implementer(ISessionFactory)
-class TetSessionFactory(self)
+class TetSessionFactory:
     def __init__(self, session_type):
         self.session_type = session_type
 

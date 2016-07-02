@@ -46,3 +46,8 @@ def configure_i18n(config: Configurator, default_domain: str):
     config.add_request_method(translate, property=True, reify=True)
     config.add_request_method(pluralize, property=True, reify=True)
     config.add_request_method(get_localizer, name='localize', property=True, reify=True)
+
+
+def includeme(config: Configurator):
+    default_domain = config.get_settings()
+    configure_i18n(config, default_domain)
