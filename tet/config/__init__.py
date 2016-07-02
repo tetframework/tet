@@ -117,7 +117,9 @@ ALL_FEATURES = [
     'services',
     'i18n',
     'renderers.json',
-    'renderers.tonnikala'
+    'renderers.tonnikala',
+    'security.authorization',
+    'security.csrf'
 ]
 
 MINIMAL_FEATURES = []
