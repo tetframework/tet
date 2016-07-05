@@ -49,5 +49,6 @@ def configure_i18n(config: Configurator, default_domain: str):
 
 
 def includeme(config: Configurator):
-    default_domain = config.get_settings()
+    default_domain = config.get_settings().get('default_i18n_domain',
+                                               config.package.__name__)
     configure_i18n(config, default_domain)

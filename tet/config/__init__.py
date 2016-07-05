@@ -1,19 +1,23 @@
 from typing import Callable, Any
 
+import sys
+
 from collections import ChainMap, Mapping
 from functools import wraps
 from pyramid.config import *
+
+from pyramid.config import Configurator
 from tet.decorators import deprecated
 from tet.i18n import configure_i18n
 from tet.util.collections import flatten
 from tet.util.path import caller_package
 
 
-@deprecated
 class TetAppFactory(object):
     """
     This method is deprecated in favour of procedural configuration /
-    pyramid_zcml with create_configurator.
+    pyramid_zcml with create_configurator. See `application_factory`
+    decorator for more details.
     """
 
     scan = None
@@ -31,6 +35,7 @@ class TetAppFactory(object):
         'tet.renderers.json'
     ]
 
+    @deprecated
     def __new__(cls, global_config, **settings_kw):
         instance = cls.instantiate()
         instance.init_app_factory(global_config, settings_kw)
@@ -179,11 +184,44 @@ def create_configurator(*,
     return config
 
 
-def application_factory(factory_function: Callable[[Configurator], Any] = None,
+def application_factory(factory_function: Callable[[Configurator], Any]=None,
                         configure_only=False,
                         included_features=ALL_FEATURES,
                         excluded_features=(),
                         **extra_parameters):
+    """
+    A decorator for main method / application configurator for Tet. The
+    wrapped function must accept a single argument - the Configurator. The
+    wrapper itself accepts arguments (global_config, **settings) like an
+    ordinary Pyramid/Paster application entry point does.
+
+    If configure_only=False (the default), then the return value is a
+    WSGI application created from the configurator.
+
+    `included_features` contains an iterable of features that should be
+    automatically included in the application. By default all standard Tet
+    features are  included. For maximal future compatibility you can specify the
+    included feature names here.
+
+    `excluded_features` should be an iterable of features that shouldn't be
+     automatically included - this serves as a fast way to get all standard
+     features except a named few.
+
+    :param factory_function: The actual wrapped factory function that
+    accepts parameter (config: Configurator)
+    :param configure_only: True if no WSGI application is to be made, false
+    to actually create the WSGI application as the return value
+    :param included_features: The iterable of included features. This can
+    in turn contain other iterables; they are flattened by the wrapper into
+    a list of strings.
+    :param excluded_features: The iterable of excluded features. This can
+    in turn contain other iterables; they are flattened by the wrapper into
+    a list of strings.
+    :param extra_parameters: extra parameters that will be passed as-is to
+    the actual configurator generation.
+    :return: the WSGI app if `configure_only` is `False`; `config`, if
+    `configure_only` is `True`.
+    """
     def decorator(function):
         @wraps(function)
         def wrapper(*a, **kw):
