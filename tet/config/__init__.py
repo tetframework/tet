@@ -238,13 +238,11 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
                                          **extra_parameters)
 
             returned = function(config)
-            if isinstance(returned, Configurator):
-                config = returned
 
             if not configure_only:
                 return config.make_wsgi_app()
             else:
-                return config
+                return returned
 
         return wrapper
 
