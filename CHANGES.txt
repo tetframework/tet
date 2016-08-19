@@ -1,6 +1,9 @@
+2016-08-19  Antti Haapala  <antti.haapala@anttipatterns.com>
+
+    * SQLAlchemy root factory now gives NotFound on DataError; made into a implicit-namespace package;
+      fixed backports.typing to greater than or equal to 1.1.
+
 2013-09-07  Antti Haapala  <antti@haapala.name>
 
     * renamed the package to `tet`
-
-    * 
 

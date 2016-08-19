@@ -12,11 +12,11 @@ requires = """
     six
     sqlalchemy
     pyramid_services
-    backports.typing
+    backports.typing>=1.1
 """.split()
 
 setup(name='tet',
-      version='0.2',
+      version='0.3',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
