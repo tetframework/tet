@@ -123,6 +123,7 @@ ALL_FEATURES = [
     'i18n',
     'renderers.json',
     'renderers.tonnikala',
+    'renderers.tonnikala.i18n',
     'security.authorization',
     'security.csrf'
 ]

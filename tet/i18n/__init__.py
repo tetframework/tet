@@ -1,3 +1,5 @@
+import sys
+
 from pyramid.config import Configurator
 from pyramid.i18n import get_localizer, TranslationStringFactory
 from pyramid.threadlocal import get_current_request
@@ -18,6 +20,8 @@ def add_renderer_globals(event):
 def configure_i18n(config: Configurator, default_domain: str):
     config.add_subscriber(add_renderer_globals,
                           'pyramid.events.BeforeRender')
+    config.add_subscriber(add_renderer_globals,
+                          'tet.viewlet.IBeforeViewletRender')
 
     config.registry.tsf = tsf = TranslationStringFactory(default_domain)
 
