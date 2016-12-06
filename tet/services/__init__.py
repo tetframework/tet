@@ -1,9 +1,10 @@
-from backports.typing import TypeVar, Any
-
-from pyramid.decorator import reify
-import venusian
 import re
+
+import venusian
+from backports.typing import Any
 from zope.interface import Interface
+
+from tet.decorators import reify_attr
 
 _to_underscores = re.compile('((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))')
 
@@ -36,10 +37,13 @@ def get_service_registry(registry):
 
 
 def service(interface=Interface, name='', context_iface=Interface, scope='global'):
-    if scope not in ['global', 'request']:
-        raise ValueError("Invalid scope %s, must be either 'global' or 'request'" % (scope,))
+    if scope not in {'global', 'request'}:
+        raise ValueError(
+            "Invalid scope {}, must be either 'global' or 'request'"
+                .format(scope))
 
     service_name = name
+
     def service_decorator(wrapped):
         def callback(scanner, name, ob):
             registry = scanner.config.registry
@@ -67,7 +71,7 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
 
 
 def autowired(interface=Interface, name: str='') -> Any:
-    @reify
+    @reify_attr
     def getter(self):
         if hasattr(self, 'request'):
             context = getattr(self.request, 'context', None)
