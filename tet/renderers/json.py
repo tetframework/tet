@@ -22,11 +22,11 @@ def hook_json_renderer(config: Configurator,
 
 def add_json_adapter(config: Configurator,
                      *,
-                     type_or_iface: type,
+                     for_: type,
                      adapter: Callable[[Any], Any],
                      renderer: str='json'):
     _get_json_renderer_registry(config)[renderer].add_adapter(
-        type_or_iface=type_or_iface,
+        type_or_iface=for_,
         adapter=adapter
     )
 

@@ -10,7 +10,9 @@ subs = {
     u'&'     : u'\\u0026',
 }
 
+
 rep = re.compile(u'[{}]'.format(''.join(subs.keys())))
+
 
 def js_safe_dumps(s):
     rv = json.dumps(s)
