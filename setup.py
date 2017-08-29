@@ -19,7 +19,7 @@ if sys.version_info < (3, 6):
 
 
 setup(name='tet',
-      version='0.3.1',
+      version='0.3.2dev',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
