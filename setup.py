@@ -7,7 +7,7 @@ README = open(os.path.join(here, 'README.txt')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = """
-    pyramid>=1.7
+    pyramid>=1.9
     passlib
     six
     sqlalchemy
@@ -19,7 +19,7 @@ if sys.version_info < (3, 6):
 
 
 setup(name='tet',
-      version='0.3',
+      version='0.3.1',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
