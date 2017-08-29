@@ -1,4 +1,4 @@
-import os
+import os, sys
 
 from setuptools import setup, find_packages
 
@@ -7,16 +7,19 @@ README = open(os.path.join(here, 'README.txt')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = """
-    pyramid>=1.7
+    pyramid>=1.9
     passlib
     six
     sqlalchemy
     pyramid_services
-    backports.typing>=1.1
 """.split()
 
+if sys.version_info < (3, 6):
+    requires.append('backports.typing>=1.1,<1.2')
+
+
 setup(name='tet',
-      version='0.3',
+      version='0.3.2dev',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
