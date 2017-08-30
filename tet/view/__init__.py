@@ -69,6 +69,6 @@ class BaseController(object):
 
 
 class ServiceViews(RequestScopedBaseService):
-    def __init__(self, context, request: Request):
+    def __init__(self, request: Request):
         super().__init__(request=request)
-        self.context = context
+        self.context = getattr(request, 'context', None)

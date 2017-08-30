@@ -189,6 +189,7 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
                         configure_only=False,
                         included_features=ALL_FEATURES,
                         excluded_features=(),
+                        package=None,
                         **extra_parameters):
     """
     A decorator for main method / application configurator for Tet. The
@@ -208,6 +209,9 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
      automatically included - this serves as a fast way to get all standard
      features except a named few.
 
+    `package` should be the package passed to the Configurator object;
+    otherwise the package of the caller is assumed.
+
     :param factory_function: The actual wrapped factory function that
     accepts parameter (config: Configurator)
     :param configure_only: True if no WSGI application is to be made, false
@@ -223,6 +227,10 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
     :return: the WSGI app if `configure_only` is `False`; `config`, if
     `configure_only` is `True`.
     """
+
+    if package is None:
+        package = caller_package(ignored_modules=[__name__])
+
     def decorator(function):
         @wraps(function)
         def wrapper(*a, **kw):
@@ -236,9 +244,12 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
                                          settings=settings,
                                          included_features=included_features,
                                          excluded_features=excluded_features,
+                                         package=package,
                                          **extra_parameters)
 
             returned = function(config)
+            if isinstance(returned, Configurator):
+                config = returned
 
             if not configure_only:
                 return config.make_wsgi_app()
