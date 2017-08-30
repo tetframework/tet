@@ -1,10 +1,9 @@
 import re
+from typing import Type, TypeVar
 
 import venusian
-from backports.typing import Any
-from zope.interface import Interface
-
 from tet.decorators import reify_attr
+from zope.interface import Interface
 
 _to_underscores = re.compile('((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))')
 
@@ -70,7 +69,10 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
     return service_decorator
 
 
-def autowired(interface=Interface, name: str='') -> Any:
+T = TypeVar('T', bound=object)
+
+
+def autowired(interface: Type[T] = Interface, name: str='') -> T:
     @reify_attr
     def getter(self):
         if hasattr(self, 'request'):
