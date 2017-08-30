@@ -44,7 +44,6 @@ class reify_attr(object):
                     names.append(name)
 
             self.names = names
-            print(names)
 
         for name in self.names:
             setattr(inst, name, val)
