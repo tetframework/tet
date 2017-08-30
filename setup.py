@@ -14,7 +14,7 @@ requires = """
     pyramid_services
 """.split()
 
-if sys.version_info < (3, 6):
+if sys.version_info < (3, 5, 2):
     requires.append('backports.typing>=1.1,<1.2')
 
 
@@ -44,9 +44,5 @@ setup(name='tet',
       include_package_data=True,
       zip_safe=False,
       test_suite='tet',
-      entry_points = """\
-        [pyramid.scaffold]
-        basictet=tet.scaffolds:BasicTetTemplate
-      """,
       install_requires=requires,
 )
