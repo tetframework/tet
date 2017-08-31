@@ -22,7 +22,7 @@ _NOT_SET = object()
 
 def declarative_base(*,
                      metadata=_NOT_SET,
-                     naming_convention=_NOT_SET) -> Type:
+                     naming_convention=_NOT_SET) -> Any:
     """
     Create a declarative base, using the given naming convention, defaulting
     to the DEFAULT_NAMING_CONVENTION of this module
