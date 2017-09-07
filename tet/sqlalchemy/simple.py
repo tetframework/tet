@@ -110,6 +110,11 @@ def setup_sqlalchemy(config: Configurator,
     config.register_service_factory(
         _session_service, Session, Interface, name=name)
 
+    config.register_service(
+        scoped_session(session_factory),
+        name='scoped_session' + (':' + name if name else '')
+    )
+
     config.action('tet.sqlalchemy.simple.configure_mappers', configure_mappers)
 
 
