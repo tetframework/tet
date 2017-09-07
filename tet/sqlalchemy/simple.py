@@ -84,7 +84,7 @@ def setup_sqlalchemy(config: Configurator,
     """
 
     from sqlalchemy import engine_from_config
-    from sqlalchemy.orm import sessionmaker, Session, configure_mappers
+    from sqlalchemy.orm import sessionmaker, Session, configure_mappers, scoped_session
 
     if settings is not _NOT_SET:
         if engine is not _NOT_SET:
