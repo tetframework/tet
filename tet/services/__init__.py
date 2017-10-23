@@ -2,10 +2,10 @@ import re
 from typing import Type, TypeVar
 
 import venusian
-from zope.interface.interface import InterfaceClass
-
+from pyramid.config import Configurator
 from tet.decorators import reify_attr
 from zope.interface import Interface
+from zope.interface.interface import InterfaceClass
 
 _to_underscores = re.compile('((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))')
 
@@ -37,7 +37,49 @@ def get_service_registry(registry):
     return registry.services
 
 
-def service(interface=Interface, name='', context_iface=Interface, scope='global'):
+def register_tet_service(config: Configurator,
+                         service_factory,
+                         *,
+                         scope='global',
+                         interface=Interface,
+                         name='',
+                         context_iface=Interface):
+    registry = config.registry
+    if scope == 'global':
+        # register only once
+        if registry.queryUtility(interface, name=name) is None:
+            ob_instance = service_factory(registry=registry)
+            get_service_registry(registry)._register_service(ob_instance,
+                                                             interface)
+
+            # only classes can be registered.
+            if isinstance(interface, InterfaceClass):
+                registry.registerUtility(ob_instance,
+                                         interface,
+                                         name=name)
+
+            config.register_service(
+                service=ob_instance,
+                iface=interface,
+                context=context_iface,
+                name=name)
+
+    else:
+        # noinspection PyUnusedLocal
+        def wrapped_factory(context, request):
+            return service_factory(request=request)
+
+        config.register_service_factory(
+            wrapped_factory,
+            interface,
+            context_iface,
+            name=name)
+
+
+def service(interface=Interface,
+            name='',
+            context_iface=Interface,
+            scope='global'):
     if scope not in {'global', 'request'}:
         raise ValueError(
             "Invalid scope {}, must be either 'global' or 'request'"
@@ -47,29 +89,16 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
 
     def service_decorator(wrapped):
         def callback(scanner, name, ob):
-            registry = scanner.config.registry
+            config = scanner.config
+            config.register_tet_service(
+                ob,
+                name=service_name,
+                interface=interface,
+                context_iface=context_iface,
+                scope=scope
+            )
 
-            if scope == 'global':
-                # register only once
-                if registry.queryUtility(interface, name=name) is None:
-                    ob_instance = ob(registry=registry)
-                    get_service_registry(registry)._register_service(ob_instance, interface)
-
-                    # only classes can be registered.
-                    if isinstance(interface, InterfaceClass):
-                        registry.registerUtility(ob_instance, interface, name=service_name)
-
-                    scanner.config.register_service(ob_instance, interface, Interface, service_name)
-
-            else:
-                # noinspection PyUnusedLocal
-                def service_factory(context, request):
-                    return ob(request=request)
-
-                scanner.config.register_service_factory(
-                    service_factory, interface, context_iface, name=service_name)
-
-        info = venusian.attach(wrapped, callback, category='tet.service')
+        venusian.attach(wrapped, callback, category='tet.service')
         return wrapped
 
     return service_decorator
@@ -78,7 +107,7 @@ def service(interface=Interface, name='', context_iface=Interface, scope='global
 T = TypeVar('T', bound=object)
 
 
-def autowired(interface: Type[T] = Interface, name: str='') -> T:
+def autowired(interface: Type[T] = Interface, name: str = '') -> T:
     @reify_attr
     def getter(self):
         if hasattr(self, 'request'):
@@ -123,4 +152,5 @@ def scan_services(config, *a, **kw):
 def includeme(config):
     config.include('pyramid_services')
     config.add_directive('scan_services', scan_services)
+    config.add_directive('register_tet_service', register_tet_service)
     config.registry.services = ServiceRegistry()
