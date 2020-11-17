@@ -2,16 +2,16 @@ import re
 import json
 
 subs = {
-    u'\u2028': u'\\u2028',
-    u'\u2029': u'\\u2029',
-    u'<'     : u'\\u003c',
-    u'>'     : u'\\u003e',
-    u'/'     : u'\\u002f',
-    u'&'     : u'\\u0026',
+    '\u2028': '\\u2028',
+    '\u2029': '\\u2029',
+    '<'     : '\\u003c',
+    '>'     : '\\u003e',
+    '/'     : '\\u002f',
+    '&'     : '\\u0026',
 }
 
 
-rep = re.compile(u'[{}]'.format(''.join(subs.keys())))
+rep = re.compile('[{}]'.format(''.join(subs.keys())))
 
 
 def js_safe_dumps(s):

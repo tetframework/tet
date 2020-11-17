@@ -19,7 +19,7 @@ if sys.version_info < (3, 5, 2):
 
 
 setup(name='tet',
-      version='0.3.3dev',
+      version='0.4.0.dev0',
       description='Unearthly intelligent batteries-included application framework built on Pyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
@@ -30,6 +30,10 @@ setup(name='tet',
           "Programming Language :: Python :: 3.3",
           "Programming Language :: Python :: 3.4",
           "Programming Language :: Python :: 3.5",
+          "Programming Language :: Python :: 3.6",
+          "Programming Language :: Python :: 3.7",
+          "Programming Language :: Python :: 3.8",
+          "Programming Language :: Python :: 3.9",
           "Programming Language :: Python :: 3 :: Only",
           "Topic :: Internet :: WWW/HTTP :: WSGI",
           "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",

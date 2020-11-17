@@ -1,12 +1,8 @@
 import base64
 import string
 import random
-import six
 
-try:
-    maketrans = string.maketrans
-except:
-    maketrans = bytes.maketrans
+maketrans = bytes.maketrans
 
 class BaseCodec(object):
     @classmethod
@@ -14,10 +10,10 @@ class BaseCodec(object):
         randomizer = random.SystemRandom()
         max_num = len(cls.chars) - 1
         return b''.join(cls.chars[randomizer.randint(0, max_num)]
-            for i in range(length)).decode('UTF-8')
+            for i in range(length)).decode()
 
 class Base64(BaseCodec):
-    chars = (string.ascii_letters + string.digits + '+/').encode('UTF-8')
+    chars = (string.ascii_letters + string.digits + '+/').encode()
     padding = True
 
     @classmethod
@@ -43,8 +39,8 @@ _crockford_b32_to_std_b32 = maketrans(
 )
 
 _normalize_crockford_b32 = maketrans(
-    b"OIL" + string.ascii_lowercase.encode('UTF-8'),
-    b"011" + string.ascii_uppercase.encode('UTF-8')
+    b"OIL" + string.ascii_lowercase.encode(),
+    b"011" + string.ascii_uppercase.encode()
 )
 
 class CrockfordBase32(BaseCodec):
@@ -53,19 +49,19 @@ class CrockfordBase32(BaseCodec):
 
     @classmethod
     def encode(cls, string, normalize=True, validate=False):
-        if isinstance(string, six.text_type):
-            string = string.decode("utf-8")
+        if isinstance(string, str):
+            string = string.decode()
 
         return base64.b32encode(string).translate(
-                _std_b32_to_crockford_b32, b'=').decode('UTF-8')
+                _std_b32_to_crockford_b32, b'=').decode()
 
     @classmethod
     def decode(cls, string, normalize=True, validate=False):
         if normalize:
             string = cls.normalize(string)
 
-        if isinstance(string, six.text_type):
-            string = string.encode("utf-8")
+        if isinstance(string, str):
+            string = string.encode()
 
         # Ensure the manatory padding is correct:
         b32 = string.upper()
@@ -76,8 +72,8 @@ class CrockfordBase32(BaseCodec):
 
     @classmethod
     def normalize(cls, string):
-        if isinstance(string, six.text_type):
-            string = string.encode("utf-8")
+        if isinstance(string, str):
+            string = string.encode()
 
         string = string.translate(_normalize_crockford_b32)
-        return string.decode('UTF-8')
+        return string.decode()
