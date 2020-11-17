@@ -2,7 +2,8 @@ from typing import Callable, Any
 
 import sys
 
-from collections import ChainMap, Mapping
+from collections import ChainMap
+from collections.abc import Mapping
 from functools import wraps
 from pyramid.config import *
 
