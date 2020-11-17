@@ -1,7 +1,3 @@
-import sqlalchemy as sa
-from sqlalchemy import orm as orm
-from sqlalchemy.ext import declarative
-
 from ..util.crypt import crypt, verify
 
 class UserPasswordMixin(object):
