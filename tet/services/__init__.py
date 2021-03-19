@@ -111,8 +111,8 @@ def autowired(interface: Type[T] = Interface, name: str = '') -> T:
     @reify_attr
     def getter(self):
         if hasattr(self, 'request'):
-            context = getattr(self.request, 'context', None)
-            return self.request.find_service(interface, context, name)
+            # remove context discrimination. It didn't work anyway.
+            return self.request.find_service(interface, None, name)
 
         return self.registry.getUtility(interface, name)
 
