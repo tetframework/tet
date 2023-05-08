@@ -12,10 +12,9 @@ README = readfile('README.txt')
 CHANGES = readfile('CHANGES.txt')
 
 requires = """
-    pyramid>=1.9
+    pyramid>=2.0
     passlib
     sqlalchemy
-    pyramid_services
 """.split()
 
 if sys.version_info < (3, 5, 2):

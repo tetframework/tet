@@ -1,6 +1,5 @@
 from typing import Type, Any, Optional
 
-import tet.services
 from pyramid.config import Configurator
 
 # Recommended naming convention used by Alembic, as various different database
@@ -130,7 +129,7 @@ def includeme(config: Configurator) -> None:
         raise RuntimeError('sqlalchemy cannot be imported, '
                            'unable to include tet.sqlalchemy.simple') from e
 
-    config.include('pyramid_services')
+    config.include('pyramid_di')
 
     settings = config.get_settings()
     settings['tm.manager_hook'] = 'pyramid_tm.explicit_manager'

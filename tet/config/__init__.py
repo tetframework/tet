@@ -32,7 +32,7 @@ class TetAppFactory(object):
     # :type config: Configurator
     config = None
     default_includes = [
-        'tet.services',
+        'pyramid_di',
         'tet.renderers.json'
     ]
 
@@ -120,7 +120,6 @@ class TetAppFactory(object):
 
 
 ALL_FEATURES = [
-    'services',
     'i18n',
     'renderers.json',
     'renderers.tonnikala',

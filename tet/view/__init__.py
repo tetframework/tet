@@ -3,7 +3,7 @@ from inspect import isclass
 from pyramid.request import Request
 from pyramid.view import *
 from pyramid.view import view_config as _pyramid_view_config
-from tet.services import RequestScopedBaseService
+from pyramid_di import RequestScopedBaseService
 
 
 class view_config(_pyramid_view_config):
