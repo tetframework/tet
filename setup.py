@@ -15,6 +15,7 @@ requires = """
     pyramid>=2.0
     passlib
     sqlalchemy
+    pyramid_di
 """.split()
 
 if sys.version_info < (3, 5, 2):
