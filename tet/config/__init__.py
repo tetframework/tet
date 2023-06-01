@@ -188,7 +188,7 @@ def create_configurator(*,
 
 def application_factory(factory_function: Callable[[Configurator], Any]=None,
                         configure_only=False,
-                        included_features=ALL_FEATURES,
+                        included_features=MINIMAL_FEATURES,
                         excluded_features=(),
                         package=None,
                         **extra_parameters):
