@@ -1,13 +1,12 @@
 from typing import Any, Optional
 
 from pyramid.config import Configurator
+from pyramid.request import Request
+from zope.interface import Interface
 
 # Recommended naming convention used by Alembic, as various different database
 # providers will autogenerate vastly different names making migrations more
 # difficult. See: http://alembic.zzzcomputing.com/en/latest/naming.html
-from pyramid.request import Request
-from zope.interface import Interface
-
 DEFAULT_NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -86,7 +85,7 @@ def setup_sqlalchemy(
 
     if settings is not _NOT_SET:
         if engine is not _NOT_SET:
-            raise ValueError("Only one of settings, " "engine may be specified")
+            raise ValueError("Only one of settings, engine may be specified")
     else:
         settings = config.registry.settings
 
@@ -124,7 +123,7 @@ def includeme(config: Configurator) -> None:
         import sqlalchemy
     except ImportError as e:
         raise RuntimeError(
-            "sqlalchemy cannot be imported, " "unable to include tet.sqlalchemy.simple"
+            "sqlalchemy cannot be imported, unable to include tet.sqlalchemy.simple"
         ) from e
 
     config.include("pyramid_di")
