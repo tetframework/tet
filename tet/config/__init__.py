@@ -1,13 +1,12 @@
-from typing import Callable, Any
-
 import sys
-
 from collections import ChainMap
 from collections.abc import Mapping
 from functools import wraps
-from pyramid.config import *
+from typing import Any, Callable
 
+from pyramid.config import *
 from pyramid.config import Configurator
+
 from tet.decorators import deprecated
 from tet.i18n import configure_i18n
 from tet.util.collections import flatten
@@ -31,10 +30,7 @@ class TetAppFactory(object):
 
     # :type config: Configurator
     config = None
-    default_includes = [
-        'tet.services',
-        'tet.renderers.json'
-    ]
+    default_includes = ["tet.renderers.json"]
 
     @deprecated
     def __new__(cls, global_config, **settings_kw):
@@ -120,28 +116,29 @@ class TetAppFactory(object):
 
 
 ALL_FEATURES = [
-    'services',
-    'i18n',
-    'renderers.json',
-    'renderers.tonnikala',
-    'renderers.tonnikala.i18n',
-    'security.authorization',
-    'security.csrf'
+    "services",
+    "i18n",
+    "renderers.json",
+    "renderers.tonnikala",
+    "renderers.tonnikala.i18n",
+    "security.authorization",
+    "security.csrf",
 ]
 
 MINIMAL_FEATURES = []
 
 
-def create_configurator(*,
-                        global_config=None,
-                        settings=None,
-                        merge_global_config=True,
-                        configurator_class=Configurator,
-                        included_features=(),
-                        excluded_features=(),
-                        package=None,
-                        **kw) -> Configurator:
-
+def create_configurator(
+    *,
+    global_config=None,
+    settings=None,
+    merge_global_config=True,
+    configurator_class=Configurator,
+    included_features=(),
+    excluded_features=(),
+    package=None,
+    **kw
+) -> Configurator:
     defaults = {}
     if merge_global_config and isinstance(global_config, Mapping):
         settings = ChainMap(settings, global_config, defaults)
@@ -151,20 +148,18 @@ def create_configurator(*,
     if package is None:
         package = caller_package(ignored_modules=[__name__])
 
-    for name in ['default_i18n_domain']:
+    for name in ["default_i18n_domain"]:
         if name in kw:
             extracted_settings[name] = kw.pop(name)
 
-    if hasattr(package, '__name__'):
+    if hasattr(package, "__name__"):
         package_name = package.__name__
     else:
         package_name = package
 
-    defaults['default_i18n_domain'] = package_name
+    defaults["default_i18n_domain"] = package_name
 
-    config = configurator_class(settings=settings,
-                                package=package,
-                                **kw)
+    config = configurator_class(settings=settings, package=package, **kw)
     config.add_settings(extracted_settings)
     included_features = list(flatten(included_features))
     excluded_features = set(flatten(excluded_features))
@@ -175,23 +170,25 @@ def create_configurator(*,
     for feature_name in included_features:
         if feature_name in feature_set:
             try:
-                config.include('tet.' + feature_name)
+                config.include("tet." + feature_name)
             except Exception as e:
-                print('Unable to include feature {}: {}'.format(
-                    feature_name,
-                    e
-                ), file=sys.stderr)
+                print(
+                    "Unable to include feature {}: {}".format(feature_name, e),
+                    file=sys.stderr,
+                )
                 raise
 
     return config
 
 
-def application_factory(factory_function: Callable[[Configurator], Any]=None,
-                        configure_only=False,
-                        included_features=MINIMAL_FEATURES,
-                        excluded_features=(),
-                        package=None,
-                        **extra_parameters):
+def application_factory(
+    factory_function: Callable[[Configurator], Any] = None,
+    configure_only=False,
+    included_features=MINIMAL_FEATURES,
+    excluded_features=(),
+    package=None,
+    **extra_parameters
+):
     """
     A decorator for main method / application configurator for Tet. The
     wrapped function must accept a single argument - the Configurator. The
@@ -236,17 +233,21 @@ def application_factory(factory_function: Callable[[Configurator], Any]=None,
         @wraps(function)
         def wrapper(*a, **kw):
             if len(a) > 1:
-                raise TypeError('application_factory wrapped function '
-                                'called with more than 1 positional argument')
+                raise TypeError(
+                    "application_factory wrapped function "
+                    "called with more than 1 positional argument"
+                )
 
             global_config = a[0] if a else None
             settings = kw
-            config = create_configurator(global_config=global_config,
-                                         settings=settings,
-                                         included_features=included_features,
-                                         excluded_features=excluded_features,
-                                         package=package,
-                                         **extra_parameters)
+            config = create_configurator(
+                global_config=global_config,
+                settings=settings,
+                included_features=included_features,
+                excluded_features=excluded_features,
+                package=package,
+                **extra_parameters
+            )
 
             returned = function(config)
             if isinstance(returned, Configurator):

@@ -10,15 +10,15 @@ CHANGES = (here / "CHANGES.md").read_text()
 requires = """
     pyramid>=1.9
     passlib
-    sqlalchemy<2.0
-    pyramid_services
+    sqlalchemy
+    pyramid_di
 """.split()
 
 dev_requires = ["pytest"]
 
 setup(
     name="tet",
-    version="0.4.0",
+    version="0.4.1",
     description="Unearthly intelligent batteries-included application framework built on Pyramid",
     long_description=README + "\n\n" + CHANGES,
     classifiers=[
