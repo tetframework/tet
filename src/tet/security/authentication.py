@@ -25,12 +25,30 @@ DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
 
 
+class IUserAuthenticationService(tp.Protocol):
+    """
+    Authenticates a user and returns their ID.
+    """
+
+    def __call__(self, request: Request) -> tp.Any | None:
+        pass
+
+
+class ISecretCallback(tp.Protocol):
+    """
+    returns the secret key for JWT
+    """
+
+    def __call__(self) -> str:
+        pass
+
+
 def tet_config_auth(
     config: Configurator,
     token_model: tp.Any,
     user_id_column: str,
-    user_verification: tp.Callable[[Request], tp.Any],
-    secret_callback: tp.Callable[[], str],
+    user_verification: IUserAuthenticationService,
+    secret_callback: ISecretCallback,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
 ) -> None:
@@ -42,6 +60,7 @@ def tet_config_auth(
     config.registry.tet_auth_secret_callback = secret_callback
     config.registry.tet_auth_jwt_algorithm = jwt_algorithm
     config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
+
 
 @implementer(ISecurityPolicy)
 class TokenAuthenticationPolicy:
@@ -159,7 +178,7 @@ class TetTokenService(RequestScopedBaseService):
         if not token.startswith(prefix):
             raise ValueError("Invalid token prefix")
 
-        payload_hex = token[len(prefix) :]
+        payload_hex = token[len(prefix):]
         payload = bytes.fromhex(payload_hex)
         token_id_bytes = payload[:8]
         secret = payload[8:]
