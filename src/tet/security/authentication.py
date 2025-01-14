@@ -9,10 +9,11 @@ from pyramid.config import Configurator
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.request import Request
 from pyramid.security import NO_PERMISSION_REQUIRED
+from pyramid.interfaces import ISecurityPolicy
 from pyramid_di import RequestScopedBaseService, autowired
 from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.orm import Session
-from zope.interface import Interface
+from zope.interface import Interface, implementer
 
 __all__ = [
     "TokenAuthenticationPolicy",
@@ -20,9 +21,7 @@ __all__ = [
     "auth_include",
 ]
 
-
-SECRET_KEY = "hiddensecret"
-JWT_ALGORITHM = "HS256"
+DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
 
 
@@ -31,14 +30,20 @@ def tet_config_auth(
     token_model: tp.Any,
     user_id_column: str,
     user_verification: tp.Callable[[Request], tp.Any],
+    secret_callback: tp.Callable[[], str],
+    jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
+    jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
 ) -> None:
     """Configuration directive to set up the authentication system."""
     config.registry.tet_auth_token_model = token_model
     config.registry.tet_auth_user_id_column = user_id_column
 
     config.registry.tet_auth_user_verification = user_verification
+    config.registry.tet_auth_secret_callback = secret_callback
+    config.registry.tet_auth_jwt_algorithm = jwt_algorithm
+    config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
 
-
+@implementer(ISecurityPolicy)
 class TokenAuthenticationPolicy:
     def authenticated_userid(self, request) -> int | None:
         """Return the userid of the currently authenticated user or ``None`` if
@@ -102,7 +107,8 @@ class TetTokenService(RequestScopedBaseService):
 
         self.token_model = self.registry.tet_auth_token_model
         self.user_id_column = self.registry.tet_auth_user_id_column
-        self.jwt_expiration_mins = self.registry.get("tet_auth_jwt_expiration_mins", DEFAULT_JWT_TOKEN_EXPIRATION_MINS)
+        self.jwt_expiration_mins = self.registry.tet_auth_jwt_expiration_mins
+        self.jwt_algorithm = self.registry.tet_auth_jwt_algorithm
 
     def create_long_term_token(self, user_id: int, project_prefix: str, expire_timestamp=None, description=None) -> str:
         """
@@ -187,7 +193,7 @@ class TetTokenService(RequestScopedBaseService):
             "user_id": user_id,
             "exp": datetime.now(UTC) + timedelta(minutes=15),
         }
-        return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
+        return jwt.encode(payload, self.registry.tet_auth_secret_callback(), algorithm=self.jwt_algorithm)
 
     def verify_jwt(self, token: str) -> dict | None:
         """
@@ -201,7 +207,7 @@ class TetTokenService(RequestScopedBaseService):
         - None if the JWT is invalid or expired.
         """
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, self.registry.tet_auth_secret_callback(), algorithms=[self.jwt_algorithm])
             return payload
         except jwt.ExpiredSignatureError:
             return None
