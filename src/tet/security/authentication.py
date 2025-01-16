@@ -18,14 +18,13 @@ from zope.interface import Interface, implementer
 __all__ = [
     "TokenAuthenticationPolicy",
     "TokenMixin",
-    "auth_include",
 ]
 
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
 
 
-class IUserAuthenticationService(tp.Protocol):
+class IUserAuthenticationCallback(tp.Protocol):
     """
     Authenticates a user and returns their ID.
     """
@@ -39,15 +38,17 @@ class ISecretCallback(tp.Protocol):
     returns the secret key for JWT
     """
 
-    def __call__(self) -> str:
+    def __call__(self, request: Request) -> str:
         pass
 
 
+# TODO change name into Configure Authentication Token
 def tet_config_auth(
     config: Configurator,
+    *,
     token_model: tp.Any,
-    user_id_column: str,
-    user_verification: IUserAuthenticationService,
+    user_id_column: str = "user_id",
+    user_verification: IUserAuthenticationCallback,
     secret_callback: ISecretCallback,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
@@ -212,7 +213,7 @@ class TetTokenService(RequestScopedBaseService):
             "user_id": user_id,
             "exp": datetime.now(UTC) + timedelta(minutes=15),
         }
-        return jwt.encode(payload, self.registry.tet_auth_secret_callback(), algorithm=self.jwt_algorithm)
+        return jwt.encode(payload, self.registry.tet_auth_secret_callback(self.request), algorithm=self.jwt_algorithm)
 
     def verify_jwt(self, token: str) -> dict | None:
         """
@@ -226,7 +227,8 @@ class TetTokenService(RequestScopedBaseService):
         - None if the JWT is invalid or expired.
         """
         try:
-            payload = jwt.decode(token, self.registry.tet_auth_secret_callback(), algorithms=[self.jwt_algorithm])
+            payload = jwt.decode(token, self.registry.tet_auth_secret_callback(self.request),
+                                 algorithms=[self.jwt_algorithm])
             return payload
         except jwt.ExpiredSignatureError:
             return None
@@ -277,7 +279,7 @@ class AuthViews:
         return "ok"
 
 
-def auth_include(config: Configurator):
+def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
     config.add_view(
         AuthViews,
@@ -303,6 +305,7 @@ def auth_include(config: Configurator):
 
     config.add_directive("tet_config_auth", tet_config_auth)
 
+    config.include("pyramid_di")
     config.register_service_factory(lambda ctx, req: TetTokenService(request=req), TetTokenService, Interface)
 
     config.set_default_permission("view")
