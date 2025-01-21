@@ -371,7 +371,7 @@ def includeme(config: Configurator):
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
-    config.add_route("tet_auth_login", "login")
+    config.add_route("tet_auth_login", "login", route_prefix="api/v1/auth")
 
     config.add_view(
         AuthViews,
@@ -382,7 +382,7 @@ def includeme(config: Configurator):
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
-    config.add_route("tet_auth_jwt", "jwt-token")
+    config.add_route("tet_auth_jwt", "access-token", route_prefix="api/v1/auth")
 
     config.add_directive("tet_configure_authentication_token", tet_configure_authentication_token)
 
