@@ -331,8 +331,7 @@ class AuthViews:
         if user_id is None:
             return HTTPForbidden()
 
-        token = self.token_service.create_long_term_token(user_id, self.project_prefix, expire_timestamp=None,
-                                                          description=None)
+        token = self.token_service.create_long_term_token(user_id, self.project_prefix)
 
         resp: Response = self.response
         resp.headers["x-long-token"] = token
@@ -362,6 +361,9 @@ class AuthViews:
 
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
+    with config.route_prefix_context("api/v1/auth"):
+        config.add_route("tet_auth_login", "login")
+        config.add_route("tet_auth_jwt", "access-token")
     config.add_view(
         AuthViews,
         attr="login_view",
@@ -371,7 +373,6 @@ def includeme(config: Configurator):
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
-    config.add_route("tet_auth_login", "login", route_prefix="api/v1/auth")
 
     config.add_view(
         AuthViews,
@@ -382,7 +383,6 @@ def includeme(config: Configurator):
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
-    config.add_route("tet_auth_jwt", "access-token", route_prefix="api/v1/auth")
 
     config.add_directive("tet_configure_authentication_token", tet_configure_authentication_token)
 
@@ -390,5 +390,5 @@ def includeme(config: Configurator):
     config.register_service_factory(lambda ctx, req: TetTokenService(request=req), TetTokenService, Interface)
 
     config.set_default_permission("view")
-    config.set_authentication_policy(TokenAuthenticationPolicy())
     config.set_authorization_policy(ACLAuthorizationPolicy())
+    config.set_authentication_policy(TokenAuthenticationPolicy())
