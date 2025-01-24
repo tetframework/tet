@@ -23,6 +23,9 @@ __all__ = [
 
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
+DEFAULT_USER_ID_COLUMN = "user_id"
+DEFAULT_LONG_TERM_TOKEN = "X-Long-Token"
+DEFAULT_ACCESS_TOKEN = "X-Access-Token"
 
 
 class IUserAuthenticationCallback(tp.Protocol):
@@ -45,17 +48,18 @@ class ISecretCallback(tp.Protocol):
         pass
 
 
-# TODO change name into Configure Authentication Token
 def tet_configure_authentication_token(
     config: Configurator,
     *,
     token_model: tp.Any,
     project_prefix: str,
-    user_id_column: str = "user_id",
+    user_id_column: str = DEFAULT_USER_ID_COLUMN,
     user_verification_callback: IUserAuthenticationCallback,
     secret_callback: ISecretCallback,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
+    access_token_header: str = DEFAULT_ACCESS_TOKEN,
+    long_term_token_header: str = DEFAULT_LONG_TERM_TOKEN,
 ) -> None:
     """
     Configure token-based authentication for a Pyramid application (with conflict detection).
@@ -66,53 +70,51 @@ def tet_configure_authentication_token(
         :meth:`pyramid.config.Configurator.action` with a unique ``discriminator``, it ensures
         that conflicts are detected if multiple parts of the application try to register the
         same directive.
+    Example:
+        1. **Add the directive** (typically in your ``includeme`` function):
 
-    **Usage Example**
+        .. code-block:: python
 
-    1. **Add the directive** (typically in your ``includeme`` function):
+           from pyramid.config import Configurator
+           from myproject.auth import tet_configure_authentication_token
 
-    .. code-block:: python
+           def includeme(config: Configurator):
+               # Register the custom directive
+               config.add_directive(
+                   'tet_configure_authentication_token',
+                   tet_configure_authentication_token
+               )
 
-       from pyramid.config import Configurator
-       from myproject.auth import tet_configure_authentication_token
+        2. **Use the directive** somewhere after including it:
 
-       def includeme(config: Configurator):
-           # Register the custom directive
-           config.add_directive(
-               'tet_configure_authentication_token',
-               tet_configure_authentication_token
-           )
+        .. code-block:: python
 
-    2. **Use the directive** somewhere after including it:
+           def main(global_config, **settings):
+               config = Configurator(settings=settings)
+               config.include('myproject')  # calls includeme(...)
 
-    .. code-block:: python
+               config.tet_configure_authentication_token(
+                   token_model=MyTokenModel,
+                   project_prefix='my_project',
+                   user_verification_callback=verify_user,
+                   secret_callback=get_secret,
+                   jwt_algorithm='HS256',
+                   jwt_token_expiration_mins=120
+               )
 
-       def main(global_config, **settings):
-           config = Configurator(settings=settings)
-           config.include('myproject')  # calls includeme(...)
+               return config.make_wsgi_app()
 
-           config.tet_configure_authentication_token(
-               token_model=MyTokenModel,
-               project_prefix='my_project',
-               user_verification_callback=verify_user,
-               secret_callback=get_secret,
-               jwt_algorithm='HS256',
-               jwt_token_expiration_mins=120
-           )
+        **Accessing the Configured Values**
 
-           return config.make_wsgi_app()
+        Later in the application code, it can retrieve these values from ``request.registry``:
 
-    **Accessing the Configured Values**
+        .. code-block:: python
 
-    Later in the application code, it can retrieve these values from ``request.registry``:
-
-    .. code-block:: python
-
-       @view_config(route_name='home')
-       def home_view(request):
-           token_model = request.registry.tet_auth_token_model
-           prefix = request.registry.tet_auth_project_prefix
-           # ... do something with these values ...
+           @view_config(route_name='home')
+           def home_view(request):
+               token_model = request.registry.tet_auth_token_model
+               prefix = request.registry.tet_auth_project_prefix
+               # ... do something with these values ...
 
     Args:
         config: The current Pyramid :class:`pyramid.config.Configurator` instance.
@@ -122,13 +124,17 @@ def tet_configure_authentication_token(
         user_verification_callback: A callable to verify user credentials/status.
         secret_callback: A callable that returns a secret key or keys for token signing.
         jwt_algorithm: The JWT algorithm to use (default: ``"HS256"``).
-        jwt_token_expiration_mins: JWT expiration time in minutes (default: 60).
+        jwt_token_expiration_mins: JWT expiration time in minutes (default: 15).
+        access_token_header: The header name for the access token (default: ``"X-Access-Token"``).
+        long_term_token_header: The header name for the long-term token (default: ``"X-Long-Token"``).
     """
 
     def register():
         config.registry.tet_auth_token_model = token_model
         config.registry.tet_auth_project_prefix = project_prefix
         config.registry.tet_auth_user_id_column = user_id_column
+        config.registry.tet_auth_access_token_header = access_token_header
+        config.registry.tet_auth_long_term_token_header = long_term_token_header
 
         config.registry.tet_auth_user_verification_callback = user_verification_callback
         config.registry.tet_auth_secret_callback = secret_callback
@@ -140,7 +146,7 @@ def tet_configure_authentication_token(
 
 @implementer(ISecurityPolicy)
 class TokenAuthenticationPolicy:
-    def authenticated_userid(self, request) -> int | None:
+    def authenticated_userid(self, request: Request) -> int | None:
         """This method of the policy should
         only return a value if the request has been successfully authenticated.
 
@@ -149,7 +155,7 @@ class TokenAuthenticationPolicy:
            - ``None`` if no user is authenticated.
         """
         token_service: TetTokenService = request.find_service(TetTokenService)
-        jwt_token = request.headers.get("x-access-token")
+        jwt_token = request.headers.get(request.registry.tet_auth_access_token_header)
 
         if not jwt_token:
             return None
@@ -171,9 +177,8 @@ class TokenAuthenticationPolicy:
         return ["system.Everyone"]
 
     def forget(self, request) -> list[tuple[str, str]]:
-        """An argument may be passed which can be used to modify the headers that are set.
-        Returns:
-            A set of headers suitable for 'forgetting' the current user on subsequent requests.
+        """
+        This method does not need to be implemented for header-based authentication.
         """
         return []
 
@@ -291,7 +296,7 @@ class TetTokenService(RequestScopedBaseService):
         """
         payload = {
             "user_id": user_id,
-            "exp": datetime.now(UTC) + timedelta(minutes=15),
+            "exp": datetime.now(UTC) + timedelta(minutes=self.jwt_expiration_mins),
         }
         return jwt.encode(payload, self.registry.tet_auth_secret_callback(self.request), algorithm=self.jwt_algorithm)
 
@@ -321,6 +326,8 @@ class AuthViews:
         self.request = request
         self.registry = request.registry
         self.response = request.response
+        self.long_term_token_header = self.registry.tet_auth_long_term_token_header
+        self.access_token_header = self.registry.tet_auth_access_token_header
         self.project_prefix = self.registry.tet_auth_project_prefix
 
     def login_view(self) -> dict[str, tp.Any] | HTTPForbidden:
@@ -334,7 +341,7 @@ class AuthViews:
         token = self.token_service.create_long_term_token(user_id, self.project_prefix)
 
         resp: Response = self.response
-        resp.headers["x-long-token"] = token
+        resp.headers[self.long_term_token_header] = token
 
         return dict(
             user_id=user_id,
@@ -342,7 +349,7 @@ class AuthViews:
         )
 
     def jwt_token_view(self) -> str:
-        token = self.request.headers.get("x-long-token")
+        token = self.request.headers.get(self.long_term_token_header)
 
         try:
             token_from_db = self.token_service.retrieve_and_validate_token(token, self.project_prefix)
@@ -354,7 +361,7 @@ class AuthViews:
 
         jwt_token = self.token_service.create_short_term_jwt(user_id)
 
-        self.response.headers["x-access-token"] = jwt_token
+        self.response.headers[self.access_token_header] = jwt_token
 
         return "ok"
 
