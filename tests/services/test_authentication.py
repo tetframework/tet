@@ -10,6 +10,7 @@ ACCESS_TOKEN_ENDPOINT = "/api/v1/auth/access-token"
 LONG_TERM_TOKEN_ENDPOINT = "/api/v1/auth/login"
 HOME_ROUTE = "/"
 
+
 @pytest.fixture()
 def test_app(pyramid_app):
     return TestApp(pyramid_app)
@@ -19,18 +20,7 @@ def test_app(pyramid_app):
 def long_term_token(pyramid_app, test_app, capture_token):
     response = test_app.post(LONG_TERM_TOKEN_ENDPOINT, status=200)
 
-    assert response.status_code == 200
-    assert "user_id" in response.json
-    assert "token" in response.json
-
-    # Validate the token captured by monkeypatch
-    assert "token" in capture_token
-    assert capture_token["token"] == response.json["token"]
-
-    token = response.json['token']
-    assert isinstance(token, str)
-    assert len(token) > 0
-    return token
+    return response.json['token']
 
 
 def create_user(db_session: Session):
@@ -72,9 +62,19 @@ def capture_token(monkeypatch, token_service, db_session):
     return captured_data
 
 
-def test_login_view_should_return_long_term_token(long_term_token):
-    assert long_term_token is not None
-    assert len(long_term_token) > 0
+def test_login_view_should_return_long_term_token(test_app, capture_token):
+    response = test_app.post(LONG_TERM_TOKEN_ENDPOINT, status=200)
+    assert response.status_code == 200
+    assert "user_id" in response.json
+    assert "token" in response.json
+
+    # Validate the token captured by monkeypatch
+    assert "token" in capture_token
+    assert capture_token["token"] == response.json["token"]
+
+    token = response.json['token']
+    assert isinstance(token, str)
+    assert len(token) > 0
 
 
 def test_auth_should_return_access_token(long_term_token, test_app):
@@ -90,7 +90,6 @@ def test_auth_should_return_access_token(long_term_token, test_app):
 def test_access_token_should_work_to_access_protected_route(long_term_token, test_app):
     headers = {"x-long-token": long_term_token}
     response = test_app.get(ACCESS_TOKEN_ENDPOINT, headers=headers, status=200)
-
     assert response.status_code == 200
 
     access_token = response.headers["x-access-token"]
@@ -103,6 +102,6 @@ def test_access_token_should_work_to_access_protected_route(long_term_token, tes
     assert "message" in response.json
     assert response.json["message"] == "Hello, World!"
 
-# Test it should stored the token in the database
-# Test it should failed to access the protected route without the access token
-# Test it should failed to access the protected route with invalid access token
+# Test it should store the token in the database
+# Test it should fail to access the protected route without the access token
+# Test it should fail to access the protected route with invalid access token
