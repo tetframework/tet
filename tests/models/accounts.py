@@ -28,7 +28,8 @@ class User(UserPasswordMixin, Base):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     email = Column(Text, nullable=False, unique=True)
-    name = Column(Text, nullable=False, default='')
+    name = Column(Text, nullable=False, unique=True)
+    display_name = Column(Text, nullable=False, default='')
     is_admin = Column(Boolean, nullable=False, default=False, server_default='false')
 
 
