@@ -5,6 +5,12 @@ We need dependencies for the tests
 pip install -e '.[test]'
 ```
 
+Create test database
+```bash
+sudo -u postgres createuser test_tet
+sudo -u postgres createdb test_tet -O test_tet
+```
+
 Run all tests
 ```bash 
 pytest --verbose -rP -vv -s
