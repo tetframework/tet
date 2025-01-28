@@ -1,8 +1,6 @@
 import logging
-from functools import wraps
 
 import pytest
-from pyramid.httpexceptions import HTTPForbidden
 from pyramid.request import Request
 from pyramid.security import Allow, Authenticated, Everyone, Deny
 from pyramid.testing import setUp, tearDown
@@ -53,7 +51,6 @@ def db_session(db_engine, pyramid_request, transaction_manager):
         yield session
 
 
-# don't actually print the logger for this callback
 def login_callback(request: Request) -> User.id:
     """This is just an example of a login callback. It should be defined by the pyramid app."""
     db_session = request.find_service(Session)
