@@ -4,18 +4,20 @@ import typing as tp
 from datetime import UTC, datetime, timedelta
 
 import jwt
+import logging
 
-from pyramid.authorization import ACLAuthorizationPolicy
+from pyramid.authorization import ACLAuthorizationPolicy, ACLHelper
 from pyramid.config import Configurator
-from pyramid.httpexceptions import HTTPForbidden
+from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized
 from pyramid.request import Request, Response
-from pyramid.security import NO_PERMISSION_REQUIRED
+from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
 from pyramid.interfaces import ISecurityPolicy
 from pyramid_di import RequestScopedBaseService, autowired
 from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.orm import Session
 from zope.interface import Interface, implementer
 
+logger = logging.getLogger(__name__)
 __all__ = [
     "TokenAuthenticationPolicy",
     "TokenMixin",
@@ -28,7 +30,7 @@ DEFAULT_LONG_TERM_TOKEN = "X-Long-Token"
 DEFAULT_ACCESS_TOKEN = "X-Access-Token"
 
 
-class IUserAuthenticationCallback(tp.Protocol):
+class ILoginCallback(tp.Protocol):
     """
     Authenticates a user and returns the user_id.
 
@@ -54,7 +56,7 @@ def tet_configure_authentication_token(
     token_model: tp.Any,
     project_prefix: str,
     user_id_column: str = DEFAULT_USER_ID_COLUMN,
-    user_verification_callback: IUserAuthenticationCallback,
+    login_callback: ILoginCallback,
     secret_callback: ISecretCallback,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
@@ -96,7 +98,7 @@ def tet_configure_authentication_token(
                config.tet_configure_authentication_token(
                    token_model=MyTokenModel,
                    project_prefix='my_project',
-                   user_verification_callback=verify_user,
+                   login_callback=verify_user,
                    secret_callback=get_secret,
                    jwt_algorithm='HS256',
                    jwt_token_expiration_mins=120
@@ -121,7 +123,7 @@ def tet_configure_authentication_token(
         token_model: A token model class or object representing user tokens.
         project_prefix: A project-specific prefix (could be used for namespacing).
         user_id_column: Column name or attribute for user ID in the token model. Defaults to ``"user_id"``.
-        user_verification_callback: A callable to verify user credentials/status.
+        login_callback: A callable to verify user credentials/status from the database.
         secret_callback: A callable that returns a secret key or keys for token signing.
         jwt_algorithm: The JWT algorithm to use (default: ``"HS256"``).
         jwt_token_expiration_mins: JWT expiration time in minutes (default: 15).
@@ -136,7 +138,7 @@ def tet_configure_authentication_token(
         config.registry.tet_auth_access_token_header = access_token_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
 
-        config.registry.tet_auth_user_verification_callback = user_verification_callback
+        config.registry.tet_auth_login_callback = login_callback
         config.registry.tet_auth_secret_callback = secret_callback
         config.registry.tet_auth_jwt_algorithm = jwt_algorithm
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
@@ -146,6 +148,9 @@ def tet_configure_authentication_token(
 
 @implementer(ISecurityPolicy)
 class TokenAuthenticationPolicy:
+    def __init__(self):
+        self.acl = ACLHelper()
+
     def authenticated_userid(self, request: Request) -> int | None:
         """This method of the policy should
         only return a value if the request has been successfully authenticated.
@@ -164,6 +169,10 @@ class TokenAuthenticationPolicy:
 
         return payload.get("user_id") if payload else None
 
+    def permits(self, request, context, permission):
+        principals = self.effective_principals(request)
+        return self.acl.permits(context, principals, permission)
+
     def effective_principals(self, request) -> list[str]:
         """This method of the policy should return at least one principal
         in the list: the userid of the user (and usually 'system.Authenticated'
@@ -171,10 +180,11 @@ class TokenAuthenticationPolicy:
         Returns:
            A sequence representing the groups that the current user is in
         """
+        principals = [Everyone]
         user_id = self.authenticated_userid(request)
         if user_id is not None:
-            return [f"user:{user_id}", "system.Authenticated"]
-        return ["system.Everyone"]
+            principals.extend([f"user:{user_id}", Authenticated])
+        return principals
 
     def forget(self, request) -> list[tuple[str, str]]:
         """
@@ -217,7 +227,7 @@ class TetTokenService(RequestScopedBaseService):
         self.jwt_expiration_mins = self.registry.tet_auth_jwt_expiration_mins
         self.jwt_algorithm = self.registry.tet_auth_jwt_algorithm
 
-    def create_long_term_token(self, user_id: int, project_prefix: str, expire_timestamp=None, description=None) -> str:
+    def create_long_term_token(self, user_id: tp.Any, project_prefix: str, expire_timestamp=None, description=None) -> str:
         """
         Generates a long-term token for a user with a project-specific prefix and stores it in the database.
         Args:
@@ -285,7 +295,7 @@ class TetTokenService(RequestScopedBaseService):
 
         return token_from_db
 
-    def create_short_term_jwt(self, user_id: int) -> str:
+    def create_short_term_jwt(self, user_id: tp.Any) -> str:
         """
         Generates a short-term JWT with a 15-minute expiration.
 
@@ -331,12 +341,12 @@ class AuthViews:
         self.project_prefix = self.registry.tet_auth_project_prefix
 
     def login_view(self) -> dict[str, tp.Any] | HTTPForbidden:
-        user_verification_callback = self.registry.tet_auth_user_verification_callback
+        login_callback = self.registry.tet_auth_login_callback
 
-        user_id = user_verification_callback(self.request)
+        user_id = login_callback(self.request)
 
         if user_id is None:
-            return HTTPForbidden()
+            raise HTTPForbidden()
 
         token = self.token_service.create_long_term_token(user_id, self.project_prefix)
 
@@ -354,8 +364,8 @@ class AuthViews:
         try:
             token_from_db = self.token_service.retrieve_and_validate_token(token, self.project_prefix)
         except ValueError as e:
-            self.request.response.status = 401
-            return str(e)
+            logger.exception(f"Error validating token: {e}")
+            raise HTTPUnauthorized()
 
         user_id = getattr(token_from_db, self.token_service.user_id_column)
 
@@ -368,9 +378,8 @@ class AuthViews:
 
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
-    with config.route_prefix_context("api/v1/auth"):
-        config.add_route("tet_auth_login", "login")
-        config.add_route("tet_auth_jwt", "access-token")
+    config.add_route("tet_auth_login", "login")
+    config.add_route("tet_auth_jwt", "access-token")
     config.add_view(
         AuthViews,
         attr="login_view",
