@@ -2,7 +2,7 @@ Running all test suites
 
 We need dependencies for the tests
 ```
-pip install -e '.[test]'
+pip install -e '.[dev]'
 ```
 
 Create test database

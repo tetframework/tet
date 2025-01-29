@@ -1,5 +1,6 @@
 import logging
 
+import typing as tp
 import pytest
 from pyramid.request import Request
 from pyramid.security import Allow, Authenticated, Everyone, Deny
@@ -51,7 +52,7 @@ def db_session(db_engine, pyramid_request, transaction_manager):
         yield session
 
 
-def login_callback(request: Request) -> User.id:
+def login_callback(request: Request) -> tp.Any:
     """This is just an example of a login callback. It should be defined by the pyramid app."""
     db_session = request.find_service(Session)
     payload = request.json_body
@@ -66,7 +67,7 @@ def login_callback(request: Request) -> User.id:
     return user.id
 
 
-def secret_callback(request: Request) -> str:
+def jwt_secret_callback(request: Request) -> str:
     """Get it from the settings or elsewhere"""
     return request.registry.settings['tet.security.authentication.secret']
 
@@ -112,7 +113,7 @@ def pyramid_app(db_engine):
             token_model=Token,
             project_prefix=config.registry.settings['project_prefix'],
             login_callback=login_callback,
-            secret_callback=secret_callback,
+            secret_callback=jwt_secret_callback,
         )
         config.add_route('home', '/')
         config.add_view(lambda request: {'message': 'Hello, World!'}, route_name='home', renderer='json')
