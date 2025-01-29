@@ -5,7 +5,6 @@ from jwt import InvalidSignatureError
 from sqlalchemy.orm import Session
 from webtest import TestApp
 
-from tests.conftest import pyramid_app
 from tests.models.accounts import User
 from tet.security.authentication import TetTokenService
 
@@ -21,10 +20,17 @@ def test_app(pyramid_app):
 
 @pytest.fixture()
 def long_term_token(pyramid_app, test_app, capture_token):
-    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
-    response = test_app.post(LONG_TERM_TOKEN_ENDPOINT, params=data, content_type="application/json", status=200)
+    data = json.dumps(
+        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
+    )
+    response = test_app.post(
+        LONG_TERM_TOKEN_ENDPOINT,
+        params=data,
+        content_type="application/json",
+        status=200,
+    )
 
-    return response.json['token']
+    return response.json["token"]
 
 
 def create_user(db_session: Session):
@@ -67,8 +73,15 @@ def capture_token(monkeypatch, token_service, db_session):
 
 
 def test_login_view_should_return_long_term_token(test_app, capture_token):
-    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
-    response = test_app.post(url=LONG_TERM_TOKEN_ENDPOINT, params=data, content_type="application/json", status=200)
+    data = json.dumps(
+        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
+    )
+    response = test_app.post(
+        url=LONG_TERM_TOKEN_ENDPOINT,
+        params=data,
+        content_type="application/json",
+        status=200,
+    )
     assert response.status_code == 200
     assert "user_id" in response.json
     assert "token" in response.json
@@ -77,7 +90,7 @@ def test_login_view_should_return_long_term_token(test_app, capture_token):
     assert "token" in capture_token
     assert capture_token["token"] == response.json["token"]
 
-    token = response.json['token']
+    token = response.json["token"]
     assert isinstance(token, str)
     assert len(token) > 0
 
@@ -108,10 +121,14 @@ def test_access_token_should_work_to_access_protected_route(long_term_token, tes
     assert response.json["message"] == "Hello, World!"
 
 
-def test_login_view_should_raise_403_when_identity_not_found_in_the_db(test_app, pyramid_request):
+def test_login_view_should_raise_403_when_identity_not_found_in_the_db(
+    test_app, pyramid_request
+):
     response = test_app.post(
         url=LONG_TERM_TOKEN_ENDPOINT,
-        params=json.dumps({"user_identity": "invalid_user", "password": "wrong_password"}),
+        params=json.dumps(
+            {"user_identity": "invalid_user", "password": "wrong_password"}
+        ),
         content_type="application/json",
         status=403,
         expect_errors=True,
@@ -119,11 +136,20 @@ def test_login_view_should_raise_403_when_identity_not_found_in_the_db(test_app,
     assert response.status_code == 403
 
 
-def test_it_should_store_the_token_in_the_database(capture_token, test_app, pyramid_request):
-    project_prefix = pyramid_request.registry.settings['project_prefix']
+def test_it_should_store_the_token_in_the_database(
+    capture_token, test_app, pyramid_request
+):
+    project_prefix = pyramid_request.registry.settings["project_prefix"]
     tet_token_service = TetTokenService(request=pyramid_request)
-    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
-    response = test_app.post(url=LONG_TERM_TOKEN_ENDPOINT, params=data, content_type="application/json", status=200)
+    data = json.dumps(
+        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
+    )
+    response = test_app.post(
+        url=LONG_TERM_TOKEN_ENDPOINT,
+        params=data,
+        content_type="application/json",
+        status=200,
+    )
     assert response.status_code == 200
     assert "user_id" in response.json
     assert "token" in response.json
@@ -132,21 +158,34 @@ def test_it_should_store_the_token_in_the_database(capture_token, test_app, pyra
     assert "token" in capture_token
     assert capture_token["token"] == response.json["token"]
 
-    response_token = response.json['token']
+    response_token = response.json["token"]
     assert isinstance(response_token, str)
     assert len(response_token) > 0
 
-    token = tet_token_service.retrieve_and_validate_token(response_token, project_prefix)
+    token = tet_token_service.retrieve_and_validate_token(
+        response_token, project_prefix
+    )
     assert token is not None
 
 
-def test_it_should_fail_to_access_the_protected_route_without_the_access_token(test_app):
+def test_it_should_fail_to_access_the_protected_route_without_the_access_token(
+    test_app,
+):
     response = test_app.get(HOME_ROUTE, status=403, expect_errors=True)
     assert response.status_code == 403
 
 
-def test_it_should_fail_to_access_the_protected_route_with_invalid_access_token(test_app):
+def test_it_should_fail_to_access_the_protected_route_with_invalid_access_token(
+    test_app,
+):
     headers = {
         "x-access-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3MzgwNjk5ODd9"
-                          ".oeTClyh2CDWH1eHJPuxlm8TwR4zzBK4QZkop17fROa"}
-    pytest.raises(InvalidSignatureError, test_app.get, HOME_ROUTE, headers=headers, expect_errors=True)
+        ".oeTClyh2CDWH1eHJPuxlm8TwR4zzBK4QZkop17fROa"
+    }
+    pytest.raises(
+        InvalidSignatureError,
+        test_app.get,
+        HOME_ROUTE,
+        headers=headers,
+        expect_errors=True,
+    )

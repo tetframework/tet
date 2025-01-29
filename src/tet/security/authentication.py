@@ -227,7 +227,13 @@ class TetTokenService(RequestScopedBaseService):
         self.jwt_expiration_mins = self.registry.tet_auth_jwt_expiration_mins
         self.jwt_algorithm = self.registry.tet_auth_jwt_algorithm
 
-    def create_long_term_token(self, user_id: tp.Any, project_prefix: str, expire_timestamp=None, description=None) -> str:
+    def create_long_term_token(
+        self,
+        user_id: tp.Any,
+        project_prefix: str,
+        expire_timestamp=None,
+        description=None,
+    ) -> str:
         """
         Generates a long-term token for a user with a project-specific prefix and stores it in the database.
         Args:
@@ -275,14 +281,18 @@ class TetTokenService(RequestScopedBaseService):
         if not token.startswith(prefix):
             raise ValueError("Invalid token prefix")
 
-        payload_hex = token[len(prefix):]
+        payload_hex = token[len(prefix) :]
         payload = bytes.fromhex(payload_hex)
         token_id_bytes = payload[:8]
         secret = payload[8:]
 
         token_id = int.from_bytes(token_id_bytes, "little")
 
-        token_from_db = self.session.query(self.token_model).filter(self.token_model.id == token_id).one_or_none()
+        token_from_db = (
+            self.session.query(self.token_model)
+            .filter(self.token_model.id == token_id)
+            .one_or_none()
+        )
 
         if not token_from_db:
             raise ValueError("Token not found")
@@ -308,7 +318,11 @@ class TetTokenService(RequestScopedBaseService):
             "user_id": user_id,
             "exp": datetime.now(UTC) + timedelta(minutes=self.jwt_expiration_mins),
         }
-        return jwt.encode(payload, self.registry.tet_auth_secret_callback(self.request), algorithm=self.jwt_algorithm)
+        return jwt.encode(
+            payload,
+            self.registry.tet_auth_secret_callback(self.request),
+            algorithm=self.jwt_algorithm,
+        )
 
     def verify_jwt(self, token: str) -> dict | None:
         """
@@ -322,8 +336,11 @@ class TetTokenService(RequestScopedBaseService):
             - ``None`` if the JWT is invalid or expired
         """
         try:
-            payload = jwt.decode(token, self.registry.tet_auth_secret_callback(self.request),
-                                 algorithms=[self.jwt_algorithm])
+            payload = jwt.decode(
+                token,
+                self.registry.tet_auth_secret_callback(self.request),
+                algorithms=[self.jwt_algorithm],
+            )
             return payload
         except jwt.ExpiredSignatureError:
             return None
@@ -362,10 +379,12 @@ class AuthViews:
         token = self.request.headers.get(self.long_term_token_header)
 
         try:
-            token_from_db = self.token_service.retrieve_and_validate_token(token, self.project_prefix)
+            token_from_db = self.token_service.retrieve_and_validate_token(
+                token, self.project_prefix
+            )
         except ValueError as e:
             logger.exception(f"Error validating token: {e}")
-            raise HTTPUnauthorized()
+            raise HTTPUnauthorized() from e
 
         user_id = getattr(token_from_db, self.token_service.user_id_column)
 
@@ -400,10 +419,14 @@ def includeme(config: Configurator):
         permission=NO_PERMISSION_REQUIRED,
     )
 
-    config.add_directive("tet_configure_authentication_token", tet_configure_authentication_token)
+    config.add_directive(
+        "tet_configure_authentication_token", tet_configure_authentication_token
+    )
 
     config.include("pyramid_di")
-    config.register_service_factory(lambda ctx, req: TetTokenService(request=req), TetTokenService, Interface)
+    config.register_service_factory(
+        lambda ctx, req: TetTokenService(request=req), TetTokenService, Interface
+    )
 
     config.set_default_permission("view")
     config.set_authorization_policy(ACLAuthorizationPolicy())

@@ -57,11 +57,12 @@ def login_callback(request: Request) -> tp.Any:
     db_session = request.find_service(Session)
     payload = request.json_body
     # user_identity here could be an email, or username
-    user_identity = payload['user_identity']
-    user = (db_session.query(User)
-            .filter(or_(User.email == user_identity,
-                        User.name == user_identity))
-            .first())
+    user_identity = payload["user_identity"]
+    user = (
+        db_session.query(User)
+        .filter(or_(User.email == user_identity, User.name == user_identity))
+        .first()
+    )
     if not user:
         return None
     return user.id
@@ -69,7 +70,7 @@ def login_callback(request: Request) -> tp.Any:
 
 def jwt_secret_callback(request: Request) -> str:
     """Get it from the settings or elsewhere"""
-    return request.registry.settings['tet.security.authentication.secret']
+    return request.registry.settings["tet.security.authentication.secret"]
 
 
 @pytest.fixture()
@@ -82,10 +83,10 @@ def pyramid_request(pyramid_app, db_engine):
 
 class RootFactory(object):
     __acl__ = [
-        (Allow, Authenticated, 'view'),
-        (Allow, 'group:editors', 'edit'),
-        (Allow, Everyone, 'login'),
-        (Deny, Everyone, 'delete')
+        (Allow, Authenticated, "view"),
+        (Allow, "group:editors", "edit"),
+        (Allow, Everyone, "login"),
+        (Deny, Everyone, "delete"),
     ]
 
     def __init__(self, request):
@@ -96,7 +97,7 @@ class RootFactory(object):
 def pyramid_app(db_engine):
     """Fixture to create and configure a Pyramid application."""
     settings = {
-        'sqlalchemy.url': DB_URL,
+        "sqlalchemy.url": DB_URL,
         "project_prefix": "tet",
         "pyramid.includes": ["pyramid_tm"],
         "tet.security.authentication.secret": "secret",
@@ -111,11 +112,15 @@ def pyramid_app(db_engine):
         config.include("tet.security.authentication", route_prefix="/api/v1/auth")
         config.tet_configure_authentication_token(
             token_model=Token,
-            project_prefix=config.registry.settings['project_prefix'],
+            project_prefix=config.registry.settings["project_prefix"],
             login_callback=login_callback,
             secret_callback=jwt_secret_callback,
         )
-        config.add_route('home', '/')
-        config.add_view(lambda request: {'message': 'Hello, World!'}, route_name='home', renderer='json')
+        config.add_route("home", "/")
+        config.add_view(
+            lambda request: {"message": "Hello, World!"},
+            route_name="home",
+            renderer="json",
+        )
         app = config.make_wsgi_app()
     yield app

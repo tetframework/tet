@@ -1,13 +1,7 @@
 from tet.security.authentication import TokenMixin
 from tet.sqlalchemy.password import UserPasswordMixin
 
-from sqlalchemy import (
-    Column,
-    Integer,
-    Text,
-    Boolean,
-    ForeignKey
-)
+from sqlalchemy import Column, Integer, Text, Boolean, ForeignKey
 from sqlalchemy import orm
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import MetaData
@@ -25,23 +19,18 @@ Base = declarative_base(metadata=metadata)
 
 
 class User(UserPasswordMixin, Base):
-    __tablename__ = 'user'
+    __tablename__ = "user"
     id = Column(Integer, primary_key=True)
     email = Column(Text, nullable=False, unique=True)
     name = Column(Text, nullable=False, unique=True)
-    display_name = Column(Text, nullable=False, default='')
-    is_admin = Column(Boolean, nullable=False, default=False, server_default='false')
+    display_name = Column(Text, nullable=False, default="")
+    is_admin = Column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class Token(TokenMixin, Base):
-    __tablename__ = 'token'
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    user = orm.relationship(User, backref='tokens')
+    __tablename__ = "token"
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    user = orm.relationship(User, backref="tokens")
 
 
-__all__ = [
-    "User",
-    "Token",
-    "Base",
-    "metadata"
-]
+__all__ = ["User", "Token", "Base", "metadata"]
