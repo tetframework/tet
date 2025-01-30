@@ -68,7 +68,7 @@ def login_callback(request: Request) -> tp.Any:
     return user.id
 
 
-def jwt_secret_callback(request: Request) -> str:
+def jwk_resolver(request: Request) -> str:
     """Get it from the settings or elsewhere"""
     return request.registry.settings["tet.security.authentication.secret"]
 
@@ -110,11 +110,11 @@ def pyramid_app(db_engine):
         config.setup_sqlalchemy(engine=db_engine)
         config.set_root_factory(RootFactory)
         config.include("tet.security.authentication", route_prefix="/api/v1/auth")
-        config.tet_configure_authentication_token(
-            token_model=Token,
+        config.tet_configure_token_authentication(
+            long_term_token_model=Token,
             project_prefix=config.registry.settings["project_prefix"],
             login_callback=login_callback,
-            secret_callback=jwt_secret_callback,
+            jwk_resolver=jwk_resolver,
         )
         config.add_route("home", "/")
         config.add_view(

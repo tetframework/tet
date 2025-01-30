@@ -50,14 +50,14 @@ class ISecretCallback(tp.Protocol):
         pass
 
 
-def tet_configure_authentication_token(
+def tet_configure_token_authentication(
     config: Configurator,
     *,
-    token_model: tp.Any,
+    long_term_token_model: tp.Any,
     project_prefix: str,
     user_id_column: str = DEFAULT_USER_ID_COLUMN,
     login_callback: ILoginCallback,
-    secret_callback: ISecretCallback,
+    jwk_resolver: ISecretCallback,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
     access_token_header: str = DEFAULT_ACCESS_TOKEN,
@@ -78,13 +78,13 @@ def tet_configure_authentication_token(
         .. code-block:: python
 
            from pyramid.config import Configurator
-           from myproject.auth import tet_configure_authentication_token
+           from myproject.auth import tet_configure_token_authentication
 
            def includeme(config: Configurator):
                # Register the custom directive
                config.add_directive(
-                   'tet_configure_authentication_token',
-                   tet_configure_authentication_token
+                   'tet_configure_token_authentication',
+                   tet_configure_token_authentication
                )
 
         2. **Use the directive** somewhere after including it:
@@ -95,11 +95,11 @@ def tet_configure_authentication_token(
                config = Configurator(settings=settings)
                config.include('myproject')  # calls includeme(...)
 
-               config.tet_configure_authentication_token(
-                   token_model=MyTokenModel,
+               config.tet_configure_token_authentication(
+                   long_term_token_model=MyTokenModel,
                    project_prefix='my_project',
                    login_callback=verify_user,
-                   secret_callback=get_secret,
+                   jwk_resolver=get_secret,
                    jwt_algorithm='HS256',
                    jwt_token_expiration_mins=120
                )
@@ -114,17 +114,17 @@ def tet_configure_authentication_token(
 
            @view_config(route_name='home')
            def home_view(request):
-               token_model = request.registry.tet_auth_token_model
+               long_term_token_model = request.registry.tet_auth_long_term_token_model
                prefix = request.registry.tet_auth_project_prefix
                # ... do something with these values ...
 
     Args:
         config: The current Pyramid :class:`pyramid.config.Configurator` instance.
-        token_model: A token model class or object representing user tokens.
+        long_term_token_model: A token model class or object representing user tokens.
         project_prefix: A project-specific prefix (could be used for namespacing).
         user_id_column: Column name or attribute for user ID in the token model. Defaults to ``"user_id"``.
         login_callback: A callable to verify user credentials/status from the database.
-        secret_callback: A callable that returns a secret key or keys for token signing.
+        jwk_resolver: A callable that returns a secret key or keys for token signing.
         jwt_algorithm: The JWT algorithm to use (default: ``"HS256"``).
         jwt_token_expiration_mins: JWT expiration time in minutes (default: 15).
         access_token_header: The header name for the access token (default: ``"X-Access-Token"``).
@@ -132,18 +132,18 @@ def tet_configure_authentication_token(
     """
 
     def register():
-        config.registry.tet_auth_token_model = token_model
+        config.registry.tet_auth_long_term_token_model = long_term_token_model
         config.registry.tet_auth_project_prefix = project_prefix
         config.registry.tet_auth_user_id_column = user_id_column
         config.registry.tet_auth_access_token_header = access_token_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
 
         config.registry.tet_auth_login_callback = login_callback
-        config.registry.tet_auth_secret_callback = secret_callback
+        config.registry.tet_auth_jwk_resolver = jwk_resolver
         config.registry.tet_auth_jwt_algorithm = jwt_algorithm
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
 
-    config.action(discriminator="tet_configure_authentication_token", callable=register)
+    config.action(discriminator="tet_configure_token_authentication", callable=register)
 
 
 @implementer(ISecurityPolicy)
@@ -222,7 +222,7 @@ class TetTokenService(RequestScopedBaseService):
     def __init__(self, request: Request):
         super().__init__(request=request)
 
-        self.token_model = self.registry.tet_auth_token_model
+        self.long_term_token_model = self.registry.tet_auth_long_term_token_model
         self.user_id_column = self.registry.tet_auth_user_id_column
         self.jwt_expiration_mins = self.registry.tet_auth_jwt_expiration_mins
         self.jwt_algorithm = self.registry.tet_auth_jwt_algorithm
@@ -248,7 +248,7 @@ class TetTokenService(RequestScopedBaseService):
         secret = secrets.token_bytes(32)
         hashed_secret = hashlib.sha256(secret).digest()
 
-        stored_token = self.token_model(
+        stored_token = self.long_term_token_model(
             secret_hash=hashed_secret.hex(),
             created_at=datetime.now(UTC),
             expires_at=expire_timestamp,
@@ -289,8 +289,8 @@ class TetTokenService(RequestScopedBaseService):
         token_id = int.from_bytes(token_id_bytes, "little")
 
         token_from_db = (
-            self.session.query(self.token_model)
-            .filter(self.token_model.id == token_id)
+            self.session.query(self.long_term_token_model)
+            .filter(self.long_term_token_model.id == token_id)
             .one_or_none()
         )
 
@@ -320,7 +320,7 @@ class TetTokenService(RequestScopedBaseService):
         }
         return jwt.encode(
             payload,
-            self.registry.tet_auth_secret_callback(self.request),
+            self.registry.tet_auth_jwk_resolver(self.request),
             algorithm=self.jwt_algorithm,
         )
 
@@ -338,7 +338,7 @@ class TetTokenService(RequestScopedBaseService):
         try:
             payload = jwt.decode(
                 token,
-                self.registry.tet_auth_secret_callback(self.request),
+                self.registry.tet_auth_jwk_resolver(self.request),
                 algorithms=[self.jwt_algorithm],
             )
             return payload
@@ -420,7 +420,7 @@ def includeme(config: Configurator):
     )
 
     config.add_directive(
-        "tet_configure_authentication_token", tet_configure_authentication_token
+        "tet_configure_token_authentication", tet_configure_token_authentication
     )
 
     config.include("pyramid_di")
