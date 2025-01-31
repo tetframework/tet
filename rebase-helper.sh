@@ -1,35 +1,25 @@
 #!/bin/bash
 # Auto-resolve common conflicts during src-layout rebase
-# Stops on conflicts it can't handle
-
 set -e
 
-MAX_ITERATIONS=200
+MAX_ITERATIONS=300
 i=0
 
 while [ $i -lt $MAX_ITERATIONS ]; do
     i=$((i + 1))
 
-    # Check if rebase is still in progress
     if ! [ -d .git/rebase-merge ] && ! [ -d .git/rebase-apply ]; then
         echo "Rebase complete!"
+        rm -f rebase-helper.sh
         exit 0
     fi
 
-    # Get current step info
-    if [ -d .git/rebase-merge ]; then
-        current=$(cat .git/rebase-merge/msgnum 2>/dev/null || echo "?")
-        total=$(cat .git/rebase-merge/end 2>/dev/null || echo "?")
-    else
-        current="?"
-        total="?"
-    fi
+    current=$(cat .git/rebase-merge/msgnum 2>/dev/null || echo "?")
+    total=$(cat .git/rebase-merge/end 2>/dev/null || echo "?")
 
-    # Get conflicting files
     conflicts=$(git status --short | grep -E "^(UU|UA|DU|AU|AA)" || true)
 
     if [ -z "$conflicts" ]; then
-        # No conflicts, just unmerged paths — add all and continue
         git add -A
         if ! GIT_EDITOR=true git rebase --continue 2>/dev/null; then
             continue
@@ -37,7 +27,7 @@ while [ $i -lt $MAX_ITERATIONS ]; do
         continue
     fi
 
-    echo "[$current/$total] Conflicts: $conflicts"
+    echo "[$current/$total] Resolving..."
 
     resolved=true
 
@@ -47,73 +37,62 @@ while [ $i -lt $MAX_ITERATIONS ]; do
 
         case "$status" in
             "DU")
-                # File deleted on HEAD (master), modified by our commit
-                # setup.py was deleted in src-layout migration
-                if [ "$file" = "setup.py" ]; then
-                    git rm -f setup.py 2>/dev/null || true
-                else
-                    echo "MANUAL: DU conflict on $file"
-                    resolved=false
-                fi
+                # File deleted on HEAD, modified by commit (setup.py mostly)
+                git rm -f "$file" 2>/dev/null || true
                 ;;
-            "UA")
-                # File added by our commit in a renamed directory
-                # Git already suggests the right location, just add it
-                git add "$file" 2>/dev/null || true
-                ;;
-            "AU")
-                # Added on HEAD, unmerged by us
+            "UA"|"AU")
                 git add "$file" 2>/dev/null || true
                 ;;
             "AA")
-                # Both added — take ours (the branch version)
-                if git checkout --theirs "$file" 2>/dev/null; then
-                    git add "$file"
-                else
-                    echo "MANUAL: AA conflict on $file"
-                    resolved=false
-                fi
+                # Both added — take ours (branch)
+                git checkout --theirs "$file" 2>/dev/null && git add "$file" || { echo "MANUAL: AA on $file"; resolved=false; }
                 ;;
             "UU")
-                # Both modified — check if it's a simple case
                 markers=$(grep -c "<<<<<<" "$file" 2>/dev/null || echo 0)
                 if [ "$markers" -eq 0 ]; then
                     git add "$file"
-                else
-                    # Try taking ours for known files
-                    case "$file" in
-                        tests/conftest.py|tests/*)
-                            git checkout --theirs "$file" 2>/dev/null && git add "$file" || { echo "MANUAL: UU on $file"; resolved=false; }
-                            ;;
-                        *)
-                            echo "MANUAL: UU conflict ($markers markers) on $file"
-                            resolved=false
-                            ;;
-                    esac
+                    continue
                 fi
+                # Security files and tests: take theirs (branch version)
+                # Non-security files: take ours (master version)
+                case "$file" in
+                    src/tet/security/*|tests/*|docs/authentication_apis*|docs/security_guide*|CHANGES.md|.github/*)
+                        git checkout --theirs "$file" 2>/dev/null && git add "$file" || { echo "MANUAL: UU on $file"; resolved=false; }
+                        ;;
+                    *)
+                        git checkout --ours "$file" 2>/dev/null && git add "$file" || { echo "MANUAL: UU on $file"; resolved=false; }
+                        ;;
+                esac
                 ;;
             *)
-                echo "MANUAL: Unknown status $status on $file"
+                echo "MANUAL: $status on $file"
                 resolved=false
                 ;;
         esac
     done <<< "$conflicts"
 
     if [ "$resolved" = false ]; then
-        echo "Stopping — manual resolution needed at step $current/$total"
+        echo "Stopping at step $current/$total — manual resolution needed"
+        git status --short
         exit 1
     fi
 
     git add -A
-    if ! GIT_EDITOR=true git rebase --continue 2>/dev/null; then
-        # rebase --continue might fail if there are no changes (empty commit)
-        # Try skip in that case
-        if git diff --cached --quiet 2>/dev/null; then
+
+    # Try continue; handle empty commits
+    result=$(GIT_EDITOR=true git rebase --continue 2>&1) || {
+        if echo "$result" | grep -q "No changes"; then
             echo "[$current/$total] Empty commit, skipping"
             git rebase --skip 2>/dev/null || true
+        elif echo "$result" | grep -q "could not apply"; then
+            # Next conflict, loop will handle it
+            true
+        else
+            echo "Unexpected error: $result"
+            exit 1
         fi
-    fi
+    }
 done
 
-echo "Hit max iterations ($MAX_ITERATIONS)"
+echo "Hit max iterations"
 exit 1
