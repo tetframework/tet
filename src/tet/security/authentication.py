@@ -115,7 +115,7 @@ class ISecretCallback(tp.Protocol):
         pass
 
 
-def tet_configure_token_authentication(
+def set_token_authentication(
     config: Configurator,
     *,
     long_term_token_model: tp.Any,
@@ -144,13 +144,13 @@ def tet_configure_token_authentication(
         .. code-block:: python
 
            from pyramid.config import Configurator
-           from myproject.auth import tet_configure_token_authentication
+           from myproject.auth import set_token_authentication
 
            def includeme(config: Configurator):
                # Register the custom directive
                config.add_directive(
-                   'tet_configure_token_authentication',
-                   tet_configure_token_authentication
+                   'set_token_authentication',
+                   set_token_authentication
                )
 
         2. **Use the directive** somewhere after including it:
@@ -161,7 +161,7 @@ def tet_configure_token_authentication(
                config = Configurator(settings=settings)
                config.include('myproject')  # calls includeme(...)
 
-               config.tet_configure_token_authentication(
+               config.set_token_authentication(
                    long_term_token_model=MyTokenModel,
                    project_prefix='my_project',
                    login_callback=verify_user,
@@ -211,7 +211,7 @@ def tet_configure_token_authentication(
         config.registry.tet_auth_jwt_algorithm = jwt_algorithm
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
 
-    config.action(discriminator="tet_configure_token_authentication", callable=register)
+    config.action(discriminator="set_token_authentication", callable=register)
 
 
 @implementer(ISecurityPolicy)
@@ -496,7 +496,7 @@ def includeme(config: Configurator):
         permission=NO_PERMISSION_REQUIRED,
     )
 
-    config.add_directive("tet_configure_token_authentication", tet_configure_token_authentication)
+    config.add_directive("set_token_authentication", set_token_authentication)
 
     config.include("pyramid_di")
     config.register_service_factory(

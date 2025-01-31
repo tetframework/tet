@@ -110,7 +110,7 @@ def pyramid_app(db_engine):
         config.setup_sqlalchemy(engine=db_engine)
         config.set_root_factory(RootFactory)
         config.include("tet.security.authentication", route_prefix="/api/v1/auth")
-        config.tet_configure_token_authentication(
+        config.set_token_authentication(
             long_term_token_model=Token,
             project_prefix=config.registry.settings["project_prefix"],
             login_callback=login_callback,
