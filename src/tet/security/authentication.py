@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import secrets
 import typing as tp
@@ -18,16 +19,80 @@ from sqlalchemy.orm import Session
 from zope.interface import Interface, implementer
 
 logger = logging.getLogger(__name__)
-__all__ = [
-    "TokenAuthenticationPolicy",
-    "TokenMixin",
-]
+__all__ = ["TokenAuthenticationPolicy", "TokenMixin", "JWTRegisteredClaims"]
+
+
+@dataclasses.dataclass
+class JWTRegisteredClaims:
+    """
+    A dataclass representing the registered claims in a JSON Web Token (JWT).
+
+    These claims are defined by the JWT specification (RFC 7519) and are commonly
+    used for token validation. The fields are optional and can be included as needed.
+
+    More info about the registered claims can be found here:
+        https://pyjwt.readthedocs.io/en/2.0.1/usage.html?highlight=datetime#registered-claim-names
+
+    Attributes:
+        user_id (Any): User ID - The unique identifier for the user.
+        iss (str): Issuer - Identifies the principal that issued the JWT.
+        sub (str): Subject - Identifies the principal that is the subject of the JWT.
+        aud (Union[str, list]): Audience - Identifies the recipients that the JWT is intended for.
+        exp (datetime): Expiration Time - Identifies when the JWT expires.
+        nbf (datetime): Not Before - Identifies when the JWT becomes valid.
+        iat (datetime): Issued At - Identifies when the JWT was issued.
+        jti (str): JWT ID - A unique identifier for the JWT.
+        leeway (int): The amount of time (in seconds) that the token is valid before/after the specified time.
+
+    Methods:
+        to_dict() -> dict[str, Any]:
+            Converts the dataclass instance into a dictionary
+
+    Example:
+
+        .. code-block:: python
+
+            claims = JWTRegisteredClaims(
+                iss="my-auth-service",
+                sub="user123",
+                aud="my-api.example.com",
+                exp=datetime.utcnow() + timedelta(hours=1),
+                iat=datetime.utcnow(),
+                jti="unique-token-id-456"
+            )
+
+            payload = claims.to_dict()
+    """
+
+    user_id: tp.Any = None
+    iss: str = None
+    sub: str = None
+    aud: tp.Union[str, list] = None
+    exp: datetime = None
+    nbf: datetime = None
+    iat: datetime = None
+    jti: str = None
+    leeway: int = 0
+
+    def to_dict(self) -> dict[str, tp.Any]:
+        """
+        Converts the JWTRegisteredClaims instance into a dictionary.
+
+        Ensures that datetime fields (`exp`, `nbf`, `iat`) are represented
+        as Unix timestamps (seconds since epoch) or datetime objects.
+
+        Returns:
+            dict[str, Any]: A dictionary representation of the registered claims.
+        """
+        return {k: v for k, v in dataclasses.asdict(self).items() if v is not None}
+
 
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
 DEFAULT_USER_ID_COLUMN = "user_id"
 DEFAULT_LONG_TERM_TOKEN = "X-Long-Token"
 DEFAULT_ACCESS_TOKEN = "X-Access-Token"
+DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
 
 
 class ILoginCallback(tp.Protocol):
@@ -46,7 +111,7 @@ class ISecretCallback(tp.Protocol):
     **Returns:** The secret key for JWT
     """
 
-    def __call__(self, request: Request) -> str:
+    def __call__(self, request: Request) -> tp.Union[str, dict]:
         pass
 
 
@@ -55,13 +120,14 @@ def tet_configure_token_authentication(
     *,
     long_term_token_model: tp.Any,
     project_prefix: str,
-    user_id_column: str = DEFAULT_USER_ID_COLUMN,
     login_callback: ILoginCallback,
     jwk_resolver: ISecretCallback,
+    user_id_column: str = DEFAULT_USER_ID_COLUMN,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
     access_token_header: str = DEFAULT_ACCESS_TOKEN,
     long_term_token_header: str = DEFAULT_LONG_TERM_TOKEN,
+    default_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
 ) -> None:
     """
     Configure token-based authentication for a Pyramid application (with conflict detection).
@@ -129,6 +195,7 @@ def tet_configure_token_authentication(
         jwt_token_expiration_mins: JWT expiration time in minutes (default: 15).
         access_token_header: The header name for the access token (default: ``"X-Access-Token"``).
         long_term_token_header: The header name for the long-term token (default: ``"X-Long-Token"``).
+        default_claims: Default JWT registered claims to include in the token payload.
     """
 
     def register():
@@ -137,6 +204,7 @@ def tet_configure_token_authentication(
         config.registry.tet_auth_user_id_column = user_id_column
         config.registry.tet_auth_access_token_header = access_token_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
+        config.registry.tet_auth_default_claims = default_claims
 
         config.registry.tet_auth_login_callback = login_callback
         config.registry.tet_auth_jwk_resolver = jwk_resolver
@@ -222,10 +290,11 @@ class TetTokenService(RequestScopedBaseService):
     def __init__(self, request: Request):
         super().__init__(request=request)
 
-        self.long_term_token_model = self.registry.tet_auth_long_term_token_model
-        self.user_id_column = self.registry.tet_auth_user_id_column
-        self.jwt_expiration_mins = self.registry.tet_auth_jwt_expiration_mins
-        self.jwt_algorithm = self.registry.tet_auth_jwt_algorithm
+        self.long_term_token_model: tp.Any = self.registry.tet_auth_long_term_token_model
+        self.user_id_column: str = self.registry.tet_auth_user_id_column
+        self.jwt_expiration_mins: int = self.registry.tet_auth_jwt_expiration_mins
+        self.jwt_algorithm: str = self.registry.tet_auth_jwt_algorithm
+        self.default_claims: JWTRegisteredClaims = self.registry.tet_auth_default_claims
 
     def create_long_term_token(
         self,
@@ -314,12 +383,16 @@ class TetTokenService(RequestScopedBaseService):
         Returns:
             The encoded JWT as a string.
         """
-        payload = {
-            "user_id": user_id,
-            "exp": datetime.now(UTC) + timedelta(minutes=self.jwt_expiration_mins),
-        }
+        # TODO: In the next update, we can add more encoding options here, such as headers, json_encoder.
+        if not user_id:
+            raise ValueError("User ID is required")
+
+        payload = self.default_claims
+        payload.user_id = user_id
+        payload.iat = datetime.now(UTC)
+        payload.exp = payload.iat + timedelta(minutes=self.jwt_expiration_mins)
         return jwt.encode(
-            payload,
+            payload.to_dict(),
             self.registry.tet_auth_jwk_resolver(self.request),
             algorithm=self.jwt_algorithm,
         )
@@ -340,6 +413,10 @@ class TetTokenService(RequestScopedBaseService):
                 token,
                 self.registry.tet_auth_jwk_resolver(self.request),
                 algorithms=[self.jwt_algorithm],
+                leeway=self.default_claims.leeway,
+                audience=self.default_claims.aud,
+                subject=self.default_claims.sub,
+                issuer=self.default_claims.iss,
             )
             return payload
         except jwt.ExpiredSignatureError:
@@ -419,9 +496,7 @@ def includeme(config: Configurator):
         permission=NO_PERMISSION_REQUIRED,
     )
 
-    config.add_directive(
-        "tet_configure_token_authentication", tet_configure_token_authentication
-    )
+    config.add_directive("tet_configure_token_authentication", tet_configure_token_authentication)
 
     config.include("pyramid_di")
     config.register_service_factory(

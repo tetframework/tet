@@ -20,9 +20,7 @@ def test_app(pyramid_app):
 
 @pytest.fixture()
 def long_term_token(pyramid_app, test_app, capture_token):
-    data = json.dumps(
-        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
-    )
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = test_app.post(
         LONG_TERM_TOKEN_ENDPOINT,
         params=data,
@@ -73,9 +71,7 @@ def capture_token(monkeypatch, token_service, db_session):
 
 
 def test_login_view_should_return_long_term_token(test_app, capture_token):
-    data = json.dumps(
-        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
-    )
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = test_app.post(
         url=LONG_TERM_TOKEN_ENDPOINT,
         params=data,
@@ -121,14 +117,10 @@ def test_access_token_should_work_to_access_protected_route(long_term_token, tes
     assert response.json["message"] == "Hello, World!"
 
 
-def test_login_view_should_raise_403_when_identity_not_found_in_the_db(
-    test_app, pyramid_request
-):
+def test_login_view_should_raise_403_when_identity_not_found_in_the_db(test_app, pyramid_request):
     response = test_app.post(
         url=LONG_TERM_TOKEN_ENDPOINT,
-        params=json.dumps(
-            {"user_identity": "invalid_user", "password": "wrong_password"}
-        ),
+        params=json.dumps({"user_identity": "invalid_user", "password": "wrong_password"}),
         content_type="application/json",
         status=403,
         expect_errors=True,
@@ -136,14 +128,10 @@ def test_login_view_should_raise_403_when_identity_not_found_in_the_db(
     assert response.status_code == 403
 
 
-def test_it_should_store_the_token_in_the_database(
-    capture_token, test_app, pyramid_request
-):
+def test_it_should_store_the_token_in_the_database(capture_token, test_app, pyramid_request):
     project_prefix = pyramid_request.registry.settings["project_prefix"]
     tet_token_service = TetTokenService(request=pyramid_request)
-    data = json.dumps(
-        {"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}
-    )
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = test_app.post(
         url=LONG_TERM_TOKEN_ENDPOINT,
         params=data,
@@ -162,9 +150,7 @@ def test_it_should_store_the_token_in_the_database(
     assert isinstance(response_token, str)
     assert len(response_token) > 0
 
-    token = tet_token_service.retrieve_and_validate_token(
-        response_token, project_prefix
-    )
+    token = tet_token_service.retrieve_and_validate_token(response_token, project_prefix)
     assert token is not None
 
 

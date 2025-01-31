@@ -87,9 +87,7 @@ class AuthorizationPolicyWrapper:
     def principals_allowed_by_permission(self, context, permission):
         """Return principals allowed the permission on context."""
         request = get_current_request()
-        return self.wrapped.principals_allowed_by_permission(
-            request, context, permission
-        )
+        return self.wrapped.principals_allowed_by_permission(request, context, permission)
 
 
 def includeme(config: Configurator):
