@@ -2,7 +2,7 @@ import dataclasses
 import hashlib
 import secrets
 import typing as tp
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import logging
@@ -93,6 +93,7 @@ DEFAULT_USER_ID_COLUMN = "user_id"
 DEFAULT_LONG_TERM_TOKEN = "X-Long-Token"
 DEFAULT_ACCESS_TOKEN = "X-Access-Token"
 DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
+UTC = timezone.utc
 
 
 class ILoginCallback(tp.Protocol):

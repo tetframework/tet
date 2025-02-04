@@ -12,7 +12,7 @@ from tests.models.accounts import Base, Token, User
 from tet.config import Configurator as tetConfigurator
 
 DB_NAME = "test_tet"
-DB_URL = f"postgresql:///{DB_NAME}"
+DB_URL = f"postgresql+psycopg2://test_tet:test_tet@localhost:5432/{DB_NAME}"
 
 logger = logging.getLogger(__name__)
 
