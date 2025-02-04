@@ -435,7 +435,7 @@ class AuthViews:
         self.access_token_header = self.registry.tet_auth_access_token_header
         self.project_prefix = self.registry.tet_auth_project_prefix
 
-    def login_view(self) -> tp.Dict[str, tp.Any] | HTTPForbidden:
+    def login_view(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden]:
         login_callback = self.registry.tet_auth_login_callback
 
         user_id = login_callback(self.request)
