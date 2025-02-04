@@ -74,7 +74,7 @@ class JWTRegisteredClaims:
     jti: str = None
     leeway: int = 0
 
-    def to_dict(self) -> dict[str, tp.Any]:
+    def to_dict(self) -> tp.Dict[str, tp.Any]:
         """
         Converts the JWTRegisteredClaims instance into a dictionary.
 
@@ -103,7 +103,7 @@ class ILoginCallback(tp.Protocol):
     **Returns:** ``user_id``
     """
 
-    def __call__(self, request: Request) -> tp.Any | None:
+    def __call__(self, request: Request) -> tp.Optional[tp.Any]:
         pass
 
 
@@ -220,7 +220,7 @@ class TokenAuthenticationPolicy:
     def __init__(self):
         self.acl = ACLHelper()
 
-    def authenticated_userid(self, request: Request) -> int | None:
+    def authenticated_userid(self, request: Request) -> tp.Optional[int]:
         """This method of the policy should
         only return a value if the request has been successfully authenticated.
 
@@ -242,7 +242,7 @@ class TokenAuthenticationPolicy:
         principals = self.effective_principals(request)
         return self.acl.permits(context, principals, permission)
 
-    def effective_principals(self, request) -> list[str]:
+    def effective_principals(self, request) -> tp.List[str]:
         """This method of the policy should return at least one principal
         in the list: the userid of the user (and usually 'system.Authenticated'
         as well).
@@ -255,7 +255,7 @@ class TokenAuthenticationPolicy:
             principals.extend([f"user:{user_id}", Authenticated])
         return principals
 
-    def forget(self, request) -> list[tuple[str, str]]:
+    def forget(self, request) -> tp.List[tuple[str, str]]:
         """
         This method does not need to be implemented for header-based authentication.
         """
@@ -398,7 +398,7 @@ class TetTokenService(RequestScopedBaseService):
             algorithm=self.jwt_algorithm,
         )
 
-    def verify_jwt(self, token: str) -> dict | None:
+    def verify_jwt(self, token: str) -> tp.Optional[tp.Dict[str, tp.Any]]:
         """
         Verifies and decodes a JWT, ensuring it is valid and not expired.
 
@@ -435,7 +435,7 @@ class AuthViews:
         self.access_token_header = self.registry.tet_auth_access_token_header
         self.project_prefix = self.registry.tet_auth_project_prefix
 
-    def login_view(self) -> dict[str, tp.Any] | HTTPForbidden:
+    def login_view(self) -> tp.Dict[str, tp.Any] | HTTPForbidden:
         login_callback = self.registry.tet_auth_login_callback
 
         user_id = login_callback(self.request)
