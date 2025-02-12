@@ -1,8 +1,10 @@
+import json
 import logging
 
 import typing as tp
 import pytest
 from pyramid.request import Request
+from pyramid.response import Response
 from pyramid.security import Allow, Authenticated, Everyone, Deny
 from pyramid.testing import setUp, tearDown
 from sqlalchemy import create_engine, or_
@@ -10,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from tests.models.accounts import Base, Token, User
 from tet.config import Configurator as tetConfigurator
+from tet.security.authentication import TokenAuthenticationPolicy, JWTCookieAuthenticationPolicy
+from tet.view import view_config
 
 DB_NAME = "test_tet"
 DB_URL = f"postgresql+psycopg2://test_tet:test_tet@localhost:5432/{DB_NAME}"
@@ -94,7 +98,7 @@ class RootFactory(object):
 
 
 @pytest.fixture()
-def pyramid_app(db_engine):
+def pyramid_config(db_engine):
     """Fixture to create and configure a Pyramid application."""
     settings = {
         "sqlalchemy.url": DB_URL,
@@ -110,17 +114,46 @@ def pyramid_app(db_engine):
         config.setup_sqlalchemy(engine=db_engine)
         config.set_root_factory(RootFactory)
         config.include("tet.security.authentication", route_prefix="/api/v1/auth")
-        config.set_token_authentication(
-            long_term_token_model=Token,
-            project_prefix=config.registry.settings["project_prefix"],
-            login_callback=login_callback,
-            jwk_resolver=jwk_resolver,
-        )
-        config.add_route("home", "/")
-        config.add_view(
-            lambda request: {"message": "Hello, World!"},
-            route_name="home",
-            renderer="json",
-        )
-        app = config.make_wsgi_app()
+    yield config
+
+
+JWT_AUTH = "TOKEN_AUTH"
+JWT_COOKIE_AUTH = "JWT_COOKIE_AUTH"
+
+
+@pytest.fixture(
+    params=[
+        pytest.param({"security_policy": TokenAuthenticationPolicy}, id=JWT_AUTH),
+        pytest.param({"security_policy": JWTCookieAuthenticationPolicy}, id=JWT_COOKIE_AUTH),
+    ]
+)
+def security_policy(request):
+    return request.param["security_policy"]
+
+
+@view_config(route_name="home", renderer="json", permission="view")
+def home_view(request: Request):
+    response: Response = request.response
+    response.text = json.dumps({"message": "Hello, World!"})
+    response.content_type = "application/json"
+    return response
+
+
+@pytest.fixture()
+def pyramid_app(security_policy, pyramid_config):
+    pyramid_config.set_token_authentication(
+        long_term_token_model=Token,
+        project_prefix=pyramid_config.registry.settings["project_prefix"],
+        login_callback=login_callback,
+        jwk_resolver=jwk_resolver,
+        security_policy=security_policy(),
+    )
+    pyramid_config.add_route("home", "/")
+    pyramid_config.add_view(
+        home_view,
+        route_name="home",
+        renderer="json",
+        permission="view",
+    )
+    app = pyramid_config.make_wsgi_app()
     yield app
