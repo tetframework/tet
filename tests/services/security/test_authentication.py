@@ -188,11 +188,10 @@ def get_cookie(cookiejar, name):
     return founded_cookie[0].value if founded_cookie else None
 
 
-def test_login_view_should_return_refresh_and_access_tokens_within_cookie(
+def test_login_view_should_return_refresh_token(
     pyramid_test_app_with_jwt_cookie_policy, capture_token, pyramid_request
 ):
     refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
-    access_token_cookie_name = pyramid_request.registry.tet_auth_access_token_cookie_name
     app = pyramid_test_app_with_jwt_cookie_policy
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = app.post(
@@ -201,19 +200,15 @@ def test_login_view_should_return_refresh_and_access_tokens_within_cookie(
         content_type="application/json",
         status=200,
     )
-    access_token = get_cookie(app.cookiejar, access_token_cookie_name)
     refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
     assert response.status_code == 200
     assert refresh_token == capture_token["token"]
-    assert access_token is not None
-    assert len(access_token) > 0
 
 
-def test_access_token_should_work_to_access_protected_route_with_cookie(
+def test_login_view_should_return_access_token(
     pyramid_test_app_with_jwt_cookie_policy, capture_token, pyramid_request
 ):
     refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
-    access_token_cookie_name = pyramid_request.registry.tet_auth_access_token_cookie_name
     app = pyramid_test_app_with_jwt_cookie_policy
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = app.post(
@@ -222,15 +217,34 @@ def test_access_token_should_work_to_access_protected_route_with_cookie(
         content_type="application/json",
         status=200,
     )
-    access_token = get_cookie(app.cookiejar, access_token_cookie_name)
     refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
     assert response.status_code == 200
     assert refresh_token == capture_token["token"]
-    assert access_token is not None
-    assert len(access_token) > 0
+    assert ACCESS_TOKEN_HEADER_NAME in response.headers
+    assert response.headers[ACCESS_TOKEN_HEADER_NAME] is not None
 
-    app.set_cookie(access_token_cookie_name, access_token)
-    response = app.get(HOME_ROUTE, status=200)
+
+def test_access_token_should_work_to_access_protected_route_with_new_policy(
+    pyramid_test_app_with_jwt_cookie_policy, capture_token, pyramid_request
+):
+    refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
+    app = pyramid_test_app_with_jwt_cookie_policy
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
+    response = app.post(
+        LONG_TERM_TOKEN_ENDPOINT,
+        params=data,
+        content_type="application/json",
+        status=200,
+    )
+    refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
+    assert response.status_code == 200
+    assert refresh_token == capture_token["token"]
+
+    access_token = response.headers[ACCESS_TOKEN_HEADER_NAME]
+    assert access_token is not None
+
+    headers = {ACCESS_TOKEN_HEADER_NAME: access_token}
+    response = app.get(HOME_ROUTE, headers=headers, status=200)
 
     assert response.status_code == 200
 

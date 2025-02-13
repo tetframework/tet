@@ -169,25 +169,20 @@ class JWTCookieAuthenticationPolicy(TokenAuthenticationPolicy):
     def __init__(self):
         super().__init__()
 
-    def authenticated_userid(self, request: Request) -> tp.Optional[int]:
-        token_service: TetTokenService = request.find_service(TetTokenService)
-        access_token_cookie_name = request.registry.tet_auth_access_token_cookie_name
-        jwt_token = request.cookies.get(access_token_cookie_name)
-
-        if not jwt_token:
-            return None
-
-        payload = token_service.verify_jwt(jwt_token)
-        return payload.get("user_id") if payload else None
-
 
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
+DEFAULT_LONG_TERM_TOKEN_EXPIRATION_MINS = 60 * 12
 DEFAULT_USER_ID_COLUMN = "user_id"
 DEFAULT_LONG_TERM_TOKEN_NAME = "X-Long-Token"
 DEFAULT_ACCESS_TOKEN_NAME = "X-Access-Token"
 DEFAULT_ACCESS_TOKEN_COOKIE_NAME = "access-token"
 DEFAULT_REFRESH_TOKEN_COOKIE_NAME = "refresh-token"
+DEFAULT_PATH = "/"
+DEFAULT_REFRESH_TOKEN_ROUTE = "refresh"
+DEFAULT_UNAUTHORIZED_MESSAGE = """Access denied. You are not authorised to access this resource.
+Please ensure that your credientials are correct and try again.
+"""
 
 DEFAULT_LOGIN_VIEW = "login"
 COOKIE_LOGIN_VIEW = "cookie_login"
@@ -226,11 +221,12 @@ def set_token_authentication(
     user_id_column: str = DEFAULT_USER_ID_COLUMN,
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
+    long_term_token_expiration_mins: int = DEFAULT_LONG_TERM_TOKEN_EXPIRATION_MINS,
     access_token_header: str = DEFAULT_ACCESS_TOKEN_NAME,
     long_term_token_header: str = DEFAULT_LONG_TERM_TOKEN_NAME,
-    access_token_cookie_name: str = DEFAULT_ACCESS_TOKEN_COOKIE_NAME,
     long_term_token_cookie_name: str = DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
     default_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
+    refresh_token_route: str = DEFAULT_REFRESH_TOKEN_ROUTE,
     security_policy: tp.Optional[
         tp.Union[type["TokenAuthenticationPolicy"], type["JWTCookieAuthenticationPolicy"]]
     ] = DEFAULT_SECURITY_POLICY,
@@ -311,7 +307,6 @@ def set_token_authentication(
         config.registry.tet_auth_user_id_column = user_id_column
         config.registry.tet_auth_access_token_header = access_token_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
-        config.registry.tet_auth_access_token_cookie_name = access_token_cookie_name
         config.registry.tet_auth_long_term_token_cookie_name = long_term_token_cookie_name
         config.registry.tet_auth_default_claims = default_claims
 
@@ -319,6 +314,8 @@ def set_token_authentication(
         config.registry.tet_auth_jwk_resolver = jwk_resolver
         config.registry.tet_auth_jwt_algorithm = jwt_algorithm
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
+        config.registry.tet_auth_long_term_token_expiration_mins = long_term_token_expiration_mins
+        config.registry.tet_auth_refresh_token_route = refresh_token_route
 
     config.action(discriminator="set_token_authentication", callable=register)
 
@@ -335,16 +332,6 @@ def set_token_authentication(
         route_name="tet_auth_login",
         renderer="json",
         request_method="POST",
-        require_csrf=False,
-        permission=NO_PERMISSION_REQUIRED,
-    )
-
-    config.add_view(
-        AuthViews,
-        attr="jwt_token",
-        route_name="tet_auth_jwt",
-        renderer="string",
-        request_method="GET",
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
@@ -522,8 +509,12 @@ class AuthViews:
         self.long_term_token_header = self.registry.tet_auth_long_term_token_header
         self.access_token_header = self.registry.tet_auth_access_token_header
         self.project_prefix = self.registry.tet_auth_project_prefix
-        self.access_token_cookie_name = self.registry.tet_auth_access_token_cookie_name
         self.long_term_token_cookie_name = self.registry.tet_auth_long_term_token_cookie_name
+        self.long_term_token_expiration_mins = (
+            self.registry.tet_auth_long_term_token_expiration_mins
+        )
+        self.refresh_token_route = self.registry.tet_auth_refresh_token_route
+        self.route_prefix = self.request.current_route_path().rpartition("/")[0]
 
     def _set_cookie(
         self,
@@ -535,6 +526,7 @@ class AuthViews:
         httponly=True,
         samesite="Lax",
         overwrite=True,
+        path=DEFAULT_PATH,
         **kwargs,
     ):
         self.response.set_cookie(
@@ -546,15 +538,29 @@ class AuthViews:
             httponly=httponly,
             samesite=samesite,
             overwrite=overwrite,
+            path=path,
             **kwargs,
         )
 
-    def login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None]:
+    def _create_jwt(self, refresh_token: str) -> str:
+        try:
+            token_from_db = self.token_service.retrieve_and_validate_token(
+                refresh_token, self.project_prefix
+            )
+        except ValueError as e:
+            logger.exception(f"Error validating token: {e}")
+            raise HTTPUnauthorized() from e
+
+        user_id = getattr(token_from_db, self.token_service.user_id_column)
+
+        return self.token_service.create_short_term_jwt(user_id)
+
+    def login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPUnauthorized, None]:
         login_callback = self.registry.tet_auth_login_callback
         user_id = login_callback(self.request)
 
         if user_id is None:
-            raise HTTPUnauthorized()
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
         refresh_token = self.token_service.create_long_term_token(user_id, self.project_prefix)
         self.response.headers[self.long_term_token_header] = refresh_token
@@ -566,37 +572,31 @@ class AuthViews:
             "success": True,
         }
 
+    def jwt_token(self) -> str:
+        token = self.request.headers.get(self.long_term_token_header)
+        access_token = self._create_jwt(token)
+        self.response.headers[self.access_token_header] = access_token
+
+        return "ok"
+
     def cookie_login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None, Response]:
         response = self.login()
         self._set_cookie(
-            name=self.access_token_cookie_name,
-            value=self.response.headers[self.access_token_header],
-            max_age=self.token_service.jwt_expiration_mins * 60,
-        )
-        self._set_cookie(
             name=self.long_term_token_cookie_name,
             value=self.response.headers[self.long_term_token_header],
-            max_age=86400,
+            max_age=self.long_term_token_expiration_mins * 60,
+            secure=False,
+            httponly=False,
+            path=f"{self.route_prefix}/{self.refresh_token_route}",
         )
         return response
 
-    def jwt_token(self) -> str:
-        token = self.request.headers.get(self.long_term_token_header)
-
-        try:
-            token_from_db = self.token_service.retrieve_and_validate_token(
-                token, self.project_prefix
-            )
-        except ValueError as e:
-            logger.exception(f"Error validating token: {e}")
-            raise HTTPUnauthorized() from e
-
-        user_id = getattr(token_from_db, self.token_service.user_id_column)
-
-        jwt_token = self.token_service.create_short_term_jwt(user_id)
-
-        self.response.headers[self.access_token_header] = jwt_token
-
+    def refresh_token(self) -> tp.Union[tp.Dict[str, tp.Any], str, HTTPUnauthorized, None]:
+        refresh_token = self.request.cookies.get(self.long_term_token_cookie_name)
+        if not refresh_token:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        access_token = self._create_jwt(refresh_token)
+        self.response.headers[self.access_token_header] = access_token
         return "ok"
 
 
@@ -604,6 +604,25 @@ def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
     config.add_route("tet_auth_login", "login")
     config.add_route("tet_auth_jwt", "access-token")
+    config.add_route("tet_auth_refresh_token", "refresh")
+    config.add_view(
+        AuthViews,
+        attr="jwt_token",
+        route_name="tet_auth_jwt",
+        renderer="string",
+        request_method="GET",
+        require_csrf=False,
+        permission=NO_PERMISSION_REQUIRED,
+    )
+    config.add_view(
+        AuthViews,
+        attr="refresh_token",
+        route_name="tet_auth_refresh_token",
+        renderer="json",
+        request_method="POST",
+        require_csrf=False,
+        permission=NO_PERMISSION_REQUIRED,
+    )
 
     config.add_directive("set_token_authentication", set_token_authentication)
 
