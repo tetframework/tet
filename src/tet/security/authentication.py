@@ -585,8 +585,6 @@ class AuthViews:
             name=self.long_term_token_cookie_name,
             value=self.response.headers[self.long_term_token_header],
             max_age=self.long_term_token_expiration_mins * 60,
-            secure=False,
-            httponly=False,
             path=f"{self.route_prefix}/{self.refresh_token_route}",
         )
         return response
