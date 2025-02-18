@@ -595,7 +595,7 @@ class AuthViews:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
         access_token = self._create_jwt(refresh_token)
         self.response.headers[self.access_token_header] = access_token
-        return "ok"
+        return {"success": True}
 
 
 def includeme(config: Configurator):
