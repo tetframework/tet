@@ -601,8 +601,8 @@ class AuthViews:
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
     config.add_route("tet_auth_login", "login")
-    config.add_route("tet_auth_jwt", "access-token")
-    config.add_route("tet_auth_refresh_token", "refresh")
+    config.add_route("tet_auth_jwt", "access_token")
+    config.add_route("tet_auth_refresh_token", "refresh_token")
     config.add_view(
         AuthViews,
         attr="jwt_token",
