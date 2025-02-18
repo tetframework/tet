@@ -179,7 +179,7 @@ DEFAULT_ACCESS_TOKEN_NAME = "X-Access-Token"
 DEFAULT_ACCESS_TOKEN_COOKIE_NAME = "access-token"
 DEFAULT_REFRESH_TOKEN_COOKIE_NAME = "refresh-token"
 DEFAULT_PATH = "/"
-DEFAULT_REFRESH_TOKEN_ROUTE = "refresh"
+DEFAULT_REFRESH_TOKEN_ROUTE = "refresh_token"
 DEFAULT_UNAUTHORIZED_MESSAGE = """Access denied. You are not authorised to access this resource.
 Please ensure that your credientials are correct and try again.
 """
