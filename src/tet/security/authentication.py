@@ -816,5 +816,10 @@ def includeme(config: Configurator):
     config.register_service_factory(
         lambda ctx, req: TetTokenService(request=req), TetTokenService, Interface
     )
+    config.register_service_factory(
+        lambda ctx, req: TetMultiFactorAuthenticationService(request=req),
+        TetMultiFactorAuthenticationService,
+        Interface,
+    )
 
     config.set_default_permission("view")
