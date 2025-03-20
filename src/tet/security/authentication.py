@@ -29,6 +29,7 @@ __all__ = [
     "JWTRegisteredClaims",
     "MultiFactorAuthMethodType",
     "MultiFactorAuthenticationMethodMixin",
+    "TetMultiFactorAuthenticationService",
     "TOTPData",
 ]
 
@@ -724,7 +725,7 @@ class AuthViews:
         self.response.headers[self.access_token_header] = access_token
         return {"success": True}
 
-    def login(self) -> HTTPFound | dict:
+    def login(self) -> tp.Union[HTTPFound, dict]:
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
