@@ -1,4 +1,5 @@
 import dataclasses
+import enum
 import hashlib
 import logging
 import secrets
@@ -6,15 +7,17 @@ import typing as tp
 from datetime import datetime, timedelta, timezone
 
 import jwt
+import pyotp
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.authorization import ACLHelper
 from pyramid.config import Configurator
-from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized
+from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized, HTTPFound
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import Request, Response
 from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
 from pyramid_di import RequestScopedBaseService, autowired
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, Enum, Boolean
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from zope.interface import Interface, implementer
 
@@ -24,6 +27,9 @@ __all__ = [
     "JWTCookieAuthenticationPolicy",
     "TokenMixin",
     "JWTRegisteredClaims",
+    "MultiFactorAuthMethodType",
+    "MultiFactorAuthenticationMethodMixin",
+    "TOTPData",
 ]
 
 
@@ -189,6 +195,7 @@ COOKIE_LOGIN_VIEW = "cookie_login"
 DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
 DEFAULT_SECURITY_POLICY = TokenAuthenticationPolicy()
 UTC = timezone.utc
+DEFAULT_EXPIRY_TIMESTAMP = datetime.now(UTC) + timedelta(hours=12)
 
 
 class ILoginCallback(tp.Protocol):
@@ -215,6 +222,8 @@ def set_token_authentication(
     config: Configurator,
     *,
     long_term_token_model: tp.Any,
+    multi_factor_auth_method_model: tp.Any,
+    user_model: tp.Any,
     project_prefix: str,
     login_callback: ILoginCallback,
     jwk_resolver: ISecretCallback,
@@ -303,6 +312,8 @@ def set_token_authentication(
 
     def register():
         config.registry.tet_auth_long_term_token_model = long_term_token_model
+        config.registry.tet_multi_factor_auth_method_model = multi_factor_auth_method_model
+        config.registry.tet_auth_user_model = user_model
         config.registry.tet_auth_project_prefix = project_prefix
         config.registry.tet_auth_user_id_column = user_id_column
         config.registry.tet_auth_access_token_header = access_token_header
@@ -337,6 +348,77 @@ def set_token_authentication(
     )
 
 
+@dataclasses.dataclass
+class TOTPData:
+    """
+    Dataclass for storing TOTP-specific configuration data.
+
+    Attributes:
+        secret: The shared secret key for TOTP generation.
+        issuer: The name of the service or application issuing the TOTP code.
+        digits: The number of digits in the generated TOTP code.
+        period: The time period (in seconds) for TOTP code generation.
+        algorithm: The hash algorithm used for TOTP generation.
+    """
+
+    secret: str
+    issuer: str
+    digits: int = 6
+    period: int = 30
+    algorithm: str = "SHA1"
+
+    def to_dict(self) -> dict:
+        return dataclasses.asdict(self)
+
+
+class MultiFactorAuthMethodType(enum.Enum):
+    """
+    Enum for the available multi-factor authentication methods.
+
+    Attributes:
+        HOTP: HMAC-based One Time Password
+        TOTP: Time-based One Time Password
+        U2F: Universal 2nd Factor
+        HMAC: Hash-based Message Authentication Code
+        OTP: One Time Password
+        SMS: Short Message Service
+    """
+
+    TOTP = "totp"
+    HOTP = "hotp"
+    U2F = "u2f"
+    HMAC = "hmac"
+    OTP = "otp"
+    SMS = "sms"
+
+
+class MultiFactorAuthenticationMethodMixin:
+    """
+    Mixin to store and manage a user's multi-factor authentication method.
+
+    Attributes:
+        id (int): Primary key for the Multi-factor authentication record.
+        method_type (MultiFactorAuthMethodType): Enum indicating the type of 2FA method (e.g. TOTP, U2F, etc.).
+        data (dict): JSONB field holding method-specific configuration or secret data.
+        is_active (bool): Flag indicating if the 2FA method is currently enabled.
+        verified (bool): Flag indicating if the 2FA method has been verified for the user.
+        created_at (datetime): Time when the record was created (timezone-aware).
+        last_used_at (datetime, optional): Timestamp of the most recent use of the 2FA method.
+    """
+
+    __tablename__ = "multi_factor_authentication_method"
+    id = Column(Integer, primary_key=True)
+    method_type = Column(Enum(MultiFactorAuthMethodType), nullable=False, index=True)
+    data = Column(JSONB, nullable=False, default=dict)
+    is_active = Column(Boolean, default=True, nullable=False)
+    verified = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(True), default=lambda: datetime.now(UTC))
+    last_used_at = Column(DateTime(True), nullable=True)
+
+    def mark_used(self):
+        self.last_used_at = datetime.now(UTC)
+
+
 class TokenMixin:
     """
     Stores long-term tokens for users with creation and optional expiration timestamps.
@@ -360,6 +442,80 @@ class TokenMixin:
     expires_at = Column(DateTime(True), nullable=True)
 
 
+class TetMultiFactorAuthenticationService(RequestScopedBaseService):
+    session: Session = autowired(Session)
+
+    def __init__(self, request: Request):
+        super().__init__(request=request)
+        self.tet_multi_factor_auth_method_model: tp.Any = (
+            self.registry.tet_multi_factor_auth_method_model
+        )
+
+    def create_multi_factor_method(
+        self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict
+    ):
+        """
+        Generate a new multi-factor authentication method for a user.
+        """
+        existing_method = (
+            self.session.query(self.tet_multi_factor_auth_method_model)
+            .filter_by(user_id=user_id, method_type=method_type)
+            .first()
+        )
+
+        if existing_method:
+            if not existing_method.is_active:
+                existing_method.data = data
+                existing_method.is_active = True
+            return
+
+        new_mfa_method = self.tet_multi_factor_auth_method_model(
+            method_type=method_type, user_id=user_id, data=data
+        )
+
+        self.session.add(new_mfa_method)
+        self.session.flush()
+
+    def disable_method(self, user_id: tp.Any, method_type: MultiFactorAuthMethodType):
+        """
+        Disable a multi-factor authentication method for a user.
+        """
+        self.session.query(self.tet_multi_factor_auth_method_model).filter_by(
+            user_id=user_id, method_type=method_type
+        ).update({"is_active": False})
+
+    def verify_totp(self, *, secret: tp.Any, token: tp.Any) -> bool:
+        """
+        Verify a one-time password for multi-factor authentication.
+        """
+        totp = pyotp.TOTP(secret)
+        return totp.verify(token)
+
+    def get_method(self, *, user_id: tp.Any, method_type: MultiFactorAuthMethodType):
+        """
+        Retrieve a multi-factor authentication method for a user.
+        """
+        return (
+            self.session.query(self.tet_multi_factor_auth_method_model)
+            .filter_by(user_id=user_id, method_type=method_type, is_active=True)
+            .first()
+        )
+
+    def is_mfa_enabled(self, user_id: tp.Any = None) -> bool:
+        """
+        Check if multi-factor authentication is enabled for the user.
+        """
+        return (
+            self.session.query(self.tet_multi_factor_auth_method_model)
+            .filter(
+                self.tet_multi_factor_auth_method_model.user_id == user_id,
+                self.tet_multi_factor_auth_method_model.is_active,
+            )
+            .count()
+            > 0
+        )
+
+
 class TetTokenService(RequestScopedBaseService):
     session: Session = autowired(Session)
 
@@ -376,7 +532,7 @@ class TetTokenService(RequestScopedBaseService):
         self,
         user_id: tp.Any,
         project_prefix: str,
-        expire_timestamp=None,
+        expire_timestamp=DEFAULT_EXPIRY_TIMESTAMP,
         description=None,
     ) -> str:
         """
@@ -501,6 +657,10 @@ class TetTokenService(RequestScopedBaseService):
 
 class AuthViews:
     token_service: TetTokenService = autowired(TetTokenService)
+    multi_factor_auth_service: TetMultiFactorAuthenticationService = autowired(
+        TetMultiFactorAuthenticationService
+    )
+    db_session: Session = autowired(Session)
 
     def __init__(self, request: Request):
         self.request = request
@@ -515,6 +675,8 @@ class AuthViews:
         )
         self.refresh_token_route = self.registry.tet_auth_refresh_token_route
         self.route_prefix = self.request.current_route_path().rpartition("/")[0]
+        self.login_callback = self.registry.tet_auth_login_callback
+        self.user_id = self.login_callback(self.request)
 
     def _set_cookie(
         self,
@@ -555,22 +717,38 @@ class AuthViews:
 
         return self.token_service.create_short_term_jwt(user_id)
 
-    def login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPUnauthorized, None]:
-        login_callback = self.registry.tet_auth_login_callback
-        user_id = login_callback(self.request)
+    def _set_tokens(self, user_id: str) -> dict:
+        refresh_token = self.token_service.create_long_term_token(user_id, self.project_prefix)
+        access_token = self.token_service.create_short_term_jwt(user_id)
+        self.response.headers[self.long_term_token_header] = refresh_token
+        self.response.headers[self.access_token_header] = access_token
+        return {"success": True}
 
-        if user_id is None:
+    def login(self) -> HTTPFound | dict:
+        if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
-        refresh_token = self.token_service.create_long_term_token(user_id, self.project_prefix)
-        self.response.headers[self.long_term_token_header] = refresh_token
+        if self.multi_factor_auth_service.is_mfa_enabled(self.user_id):
+            payload = {"success": True, "mfa_enabled": True}
+            redirect_url = self.request.route_url("mfa_challenge")
+            return HTTPFound(location=redirect_url, json_body=payload)
 
-        access_token = self.token_service.create_short_term_jwt(user_id)
-        self.response.headers[self.access_token_header] = access_token
+        return self._set_tokens(self.user_id)
 
-        return {
-            "success": True,
-        }
+    def mfa_challenge(self) -> dict:
+        if self.user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+
+        payload = self.request.json_body
+        token = payload["token"]
+        method_type = payload["method_type"]
+        mfa_method = self.multi_factor_auth_service.get_method(
+            user_id=self.user_id, method_type=method_type
+        )
+        secret = mfa_method.data.get("secret")
+        is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
+        self._set_tokens(self.user_id)
+        return {"success": is_valid}
 
     def jwt_token(self) -> str:
         token = self.request.headers.get(self.long_term_token_header)
@@ -603,6 +781,7 @@ def includeme(config: Configurator):
     config.add_route("tet_auth_login", "login")
     config.add_route("tet_auth_jwt", "access_token")
     config.add_route("tet_auth_refresh_token", "refresh_token")
+    config.add_route("tet_auth_mfa_challenge", "mfa_challenge")
     config.add_view(
         AuthViews,
         attr="jwt_token",
@@ -620,6 +799,14 @@ def includeme(config: Configurator):
         request_method="POST",
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
+    )
+    config.add_view(
+        AuthViews,
+        attr="mfa_challenge",
+        route_name="tet_auth_mfa_challenge",
+        renderer="json",
+        request_method="POST",
+        require_csrf=False,
     )
 
     config.add_directive("set_token_authentication", set_token_authentication)
