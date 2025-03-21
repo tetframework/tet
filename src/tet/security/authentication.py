@@ -731,7 +731,7 @@ class AuthViews:
 
         if self.multi_factor_auth_service.is_mfa_enabled(self.user_id):
             payload = {"success": True, "mfa_enabled": True}
-            redirect_url = self.request.route_url("mfa_challenge")
+            redirect_url = self.request.route_url("tet_auth_mfa_challenge")
             return HTTPFound(location=redirect_url, json_body=payload)
 
         return self._set_tokens(self.user_id)
