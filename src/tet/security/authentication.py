@@ -454,7 +454,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
 
     def get_or_create_method(
         self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict
-    ):
+    ) -> tp.Any:
         """
         Get or create a multi-factor authentication method for a user.
         """
@@ -468,7 +468,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             if not existing_method.is_active:
                 existing_method.data = data
                 existing_method.is_active = True
-            return
+            return existing_method
 
         new_mfa_method = self.tet_multi_factor_auth_method_model(
             method_type=method_type, user_id=user_id, data=data
@@ -476,6 +476,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
 
         self.session.add(new_mfa_method)
         self.session.flush()
+        return new_mfa_method
 
     def disable_method(self, user_id: tp.Any, method_type: MultiFactorAuthMethodType):
         """
