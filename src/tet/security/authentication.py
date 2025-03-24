@@ -485,7 +485,8 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             user_id=user_id, method_type=method_type
         ).update({"is_active": False})
 
-    def verify_totp(self, *, secret: tp.Any, token: tp.Any) -> bool:
+    @staticmethod
+    def verify_totp(secret: tp.Any, token: tp.Any) -> bool:
         """
         Verify a one-time password for multi-factor authentication.
         """
