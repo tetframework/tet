@@ -748,15 +748,11 @@ class AuthViews:
         )
         return response
 
-    def mfa_challenge(self) -> dict:
-        if self.user_id is None:
-            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-
+    def _verify_mfa(self, user_id: str) -> dict:
         payload = self.request.json_body
         token = payload["token"]
-        # TODO: Add support for other MFA methods
         mfa_method = self.multi_factor_auth_service.get_method(
-            user_id=self.user_id, method_type=MultiFactorAuthMethodType.TOTP
+            user_id=user_id, method_type=MultiFactorAuthMethodType.TOTP
         )
         secret = mfa_method.data.get("secret")
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
@@ -764,8 +760,19 @@ class AuthViews:
         if not is_valid:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
-        self._set_tokens(self.user_id)
+        self._set_tokens(user_id)
         return {"success": is_valid}
+
+    def mfa_challenge(self) -> dict:
+        if self.user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        return self._verify_mfa(self.user_id)
+
+    def mfa_verify(self) -> dict:
+        user_id = self.request.authenticated_userid
+        if not user_id:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        return self._verify_mfa(user_id)
 
     def jwt_token(self) -> str:
         token = self.request.headers.get(self.long_term_token_header)
@@ -789,6 +796,7 @@ def includeme(config: Configurator):
     config.add_route("tet_auth_jwt", "access_token")
     config.add_route("tet_auth_refresh_token", "refresh_token")
     config.add_route("tet_auth_mfa_challenge", "mfa_challenge")
+    config.add_route("tet_auth_mfa_verify", "/mfa/app/verify")
     config.add_view(
         AuthViews,
         attr="jwt_token",
@@ -815,6 +823,15 @@ def includeme(config: Configurator):
         request_method="POST",
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
+    )
+
+    config.add_view(
+        AuthViews,
+        attr="mfa_verify",
+        route_name="tet_auth_mfa_verify",
+        renderer="json",
+        request_method="POST",
+        require_csrf=False,
     )
     config.add_directive("set_token_authentication", set_token_authentication)
 
