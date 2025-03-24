@@ -328,6 +328,7 @@ def set_token_authentication(
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
         config.registry.tet_auth_long_term_token_expiration_mins = long_term_token_expiration_mins
         config.registry.tet_auth_refresh_token_route = refresh_token_route
+        config.registry.tet_auth_security_policy = security_policy
 
     config.action(discriminator="set_token_authentication", callable=register)
 
@@ -680,6 +681,7 @@ class AuthViews:
         self.route_prefix = self.request.current_route_path().rpartition("/")[0]
         self.login_callback = self.registry.tet_auth_login_callback
         self.user_id = self.login_callback(self.request)
+        self.security_policy = self.registry.tet_auth_security_policy
 
     def _set_cookie(
         self,
@@ -749,7 +751,7 @@ class AuthViews:
         )
         return response
 
-    def _verify_mfa(self, user_id: str) -> dict:
+    def _verify_mfa(self, user_id: tp.Any) -> dict:
         payload = self.request.json_body
         token = payload["token"]
         mfa_method = self.multi_factor_auth_service.get_method(
@@ -762,6 +764,13 @@ class AuthViews:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
         self._set_tokens(user_id)
+        if isinstance(self.security_policy, JWTCookieAuthenticationPolicy):
+            self._set_cookie(
+                name=self.long_term_token_cookie_name,
+                value=self.response.headers[self.long_term_token_header],
+                max_age=self.long_term_token_expiration_mins * 60,
+                path=f"{self.route_prefix}/",
+            )
         return {"success": is_valid}
 
     def mfa_challenge(self) -> dict:
