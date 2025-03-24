@@ -754,9 +754,9 @@ class AuthViews:
 
         payload = self.request.json_body
         token = payload["token"]
-        method_type = payload["method_type"]
+        # TODO: Add support for other MFA methods
         mfa_method = self.multi_factor_auth_service.get_method(
-            user_id=self.user_id, method_type=method_type
+            user_id=self.user_id, method_type=MultiFactorAuthMethodType.TOTP
         )
         secret = mfa_method.data.get("secret")
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
