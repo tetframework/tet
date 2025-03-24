@@ -730,7 +730,8 @@ class AuthViews:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
         response_payload = {"success": True}
         if self.multi_factor_auth_service.is_mfa_enabled(self.user_id):
-            return response_payload.update({"mfa_required": True})
+            response_payload["mfa_required"] = True
+            return response_payload
 
         self._set_tokens(self.user_id)
         return response_payload
