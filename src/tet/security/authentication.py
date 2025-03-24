@@ -736,6 +736,20 @@ class AuthViews:
 
         return self._set_tokens(self.user_id)
 
+    def cookie_login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None, Response]:
+        response = self.login()
+
+        if isinstance(response, HTTPFound):
+            return response
+
+        self._set_cookie(
+            name=self.long_term_token_cookie_name,
+            value=self.response.headers[self.long_term_token_header],
+            max_age=self.long_term_token_expiration_mins * 60,
+            path=f"{self.route_prefix}/",
+        )
+        return response
+
     def mfa_challenge(self) -> dict:
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
@@ -757,16 +771,6 @@ class AuthViews:
         self.response.headers[self.access_token_header] = access_token
 
         return "ok"
-
-    def cookie_login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None, Response]:
-        response = self.login()
-        self._set_cookie(
-            name=self.long_term_token_cookie_name,
-            value=self.response.headers[self.long_term_token_header],
-            max_age=self.long_term_token_expiration_mins * 60,
-            path=f"{self.route_prefix}/",
-        )
-        return response
 
     def refresh_token(self) -> tp.Union[tp.Dict[str, tp.Any], str, HTTPUnauthorized, None]:
         refresh_token = self.request.cookies.get(self.long_term_token_cookie_name)
