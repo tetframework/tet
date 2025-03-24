@@ -452,11 +452,11 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             self.registry.tet_multi_factor_auth_method_model
         )
 
-    def create_multi_factor_method(
+    def get_or_create_method(
         self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict
     ):
         """
-        Generate a new multi-factor authentication method for a user.
+        Get or create a multi-factor authentication method for a user.
         """
         existing_method = (
             self.session.query(self.tet_multi_factor_auth_method_model)
@@ -723,25 +723,19 @@ class AuthViews:
         access_token = self.token_service.create_short_term_jwt(user_id)
         self.response.headers[self.long_term_token_header] = refresh_token
         self.response.headers[self.access_token_header] = access_token
-        return {"success": True}
 
     def login(self) -> tp.Union[HTTPFound, dict]:
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
         if self.multi_factor_auth_service.is_mfa_enabled(self.user_id):
-            payload = {"success": True, "mfa_enabled": True}
-            redirect_url = self.request.route_url("tet_auth_mfa_challenge")
-            return HTTPFound(location=redirect_url, json_body=payload)
+            return self._mfa_challenge()
 
-        return self._set_tokens(self.user_id)
+        self._set_tokens(self.user_id)
+        return {"success": True}
 
     def cookie_login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None, Response]:
         response = self.login()
-
-        if isinstance(response, HTTPFound):
-            return response
-
         self._set_cookie(
             name=self.long_term_token_cookie_name,
             value=self.response.headers[self.long_term_token_header],
@@ -750,10 +744,7 @@ class AuthViews:
         )
         return response
 
-    def mfa_challenge(self) -> dict:
-        if self.user_id is None:
-            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-
+    def _mfa_challenge(self) -> dict:
         payload = self.request.json_body
         token = payload["token"]
         method_type = payload["method_type"]
@@ -762,6 +753,10 @@ class AuthViews:
         )
         secret = mfa_method.data.get("secret")
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
+
+        if not is_valid:
+            raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
+
         self._set_tokens(self.user_id)
         return {"success": is_valid}
 
@@ -786,7 +781,6 @@ def includeme(config: Configurator):
     config.add_route("tet_auth_login", "login")
     config.add_route("tet_auth_jwt", "access_token")
     config.add_route("tet_auth_refresh_token", "refresh_token")
-    config.add_route("tet_auth_mfa_challenge", "mfa_challenge")
     config.add_view(
         AuthViews,
         attr="jwt_token",
@@ -805,15 +799,6 @@ def includeme(config: Configurator):
         require_csrf=False,
         permission=NO_PERMISSION_REQUIRED,
     )
-    config.add_view(
-        AuthViews,
-        attr="mfa_challenge",
-        route_name="tet_auth_mfa_challenge",
-        renderer="json",
-        request_method="POST",
-        require_csrf=False,
-    )
-
     config.add_directive("set_token_authentication", set_token_authentication)
 
     config.include("pyramid_di")
