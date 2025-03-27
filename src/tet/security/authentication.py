@@ -772,6 +772,9 @@ class AuthViews:
         if not is_valid:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
+        mfa_method.mark_used()
+        mfa_method.verified = True
+
         self._set_tokens(user_id)
         if isinstance(self.security_policy, JWTCookieAuthenticationPolicy):
             self._set_cookie(
