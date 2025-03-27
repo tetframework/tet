@@ -505,6 +505,18 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             .first()
         )
 
+    def get_active_methods_by_user_id(
+        self, *, user_id: tp.Any, method_type: MultiFactorAuthMethodType
+    ):
+        """
+        Retrieve all multi-factor authentication methods by user id.
+        """
+        return (
+            self.session.query(self.tet_multi_factor_auth_method_model)
+            .filter_by(user_id=user_id, method_type=method_type, is_active=True)
+            .all()
+        )
+
     def is_mfa_enabled(self, user_id: tp.Any = None) -> bool:
         """
         Check if multi-factor authentication is enabled for the user.
@@ -751,7 +763,7 @@ class AuthViews:
         )
         return response
 
-    def _verify_mfa(self, user_id: tp.Any) -> dict:
+    def _verify_totp_by_user_id(self, user_id: tp.Any) -> dict:
         payload = self.request.json_body
         token = payload["token"]
         mfa_method = self.multi_factor_auth_service.get_method(
@@ -776,13 +788,13 @@ class AuthViews:
     def mfa_challenge(self) -> dict:
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-        return self._verify_mfa(self.user_id)
+        return self._verify_totp_by_user_id(self.user_id)
 
     def mfa_verify(self) -> dict:
         user_id = self.request.authenticated_userid
         if not user_id:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-        return self._verify_mfa(user_id)
+        return self._verify_totp_by_user_id(user_id)
 
     def jwt_token(self) -> str:
         token = self.request.headers.get(self.long_term_token_header)
