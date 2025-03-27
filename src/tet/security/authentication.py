@@ -505,15 +505,13 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             .first()
         )
 
-    def get_active_methods_by_user_id(
-        self, *, user_id: tp.Any, method_type: MultiFactorAuthMethodType
-    ):
+    def get_active_methods_by_user_id(self, *, user_id: tp.Any):
         """
         Retrieve all multi-factor authentication methods by user id.
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, method_type=method_type, is_active=True)
+            .filter_by(user_id=user_id, is_active=True)
             .all()
         )
 
