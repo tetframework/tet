@@ -466,9 +466,8 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         )
 
         if existing_method:
-            if not existing_method.is_active:
-                existing_method.data = data
-                existing_method.is_active = True
+            existing_method.data = data
+            existing_method.is_active = True
             return existing_method
 
         new_mfa_method = self.tet_multi_factor_auth_method_model(
@@ -511,7 +510,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, is_active=True)
+            .filter_by(user_id=user_id, is_active=True, verified=True)
             .all()
         )
 
