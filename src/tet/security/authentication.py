@@ -725,6 +725,12 @@ class AuthViews:
             )
         except ValueError as e:
             logger.exception(f"Error validating token: {e}")
+            self._set_cookie(
+                name=self.long_term_token_cookie_name,
+                value=None,
+                path=f"{self.route_prefix}/",
+                max_age=None,
+            )
             raise HTTPUnauthorized() from e
 
         user_id = getattr(token_from_db, self.token_service.user_id_column)
