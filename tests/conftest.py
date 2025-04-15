@@ -1,13 +1,13 @@
 import json
 import logging
-
 import typing as tp
+
 import pytest
 from pyramid.request import Request
 from pyramid.response import Response
 from pyramid.security import Allow, Authenticated, Everyone, Deny
 from pyramid.testing import setUp, tearDown
-from sqlalchemy import create_engine, or_
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from tests.models.accounts import Base, Token, User
@@ -58,15 +58,20 @@ def db_session(db_engine, pyramid_request, transaction_manager):
 
 def login_callback(request: Request) -> tp.Any:
     """This is just an example of a login callback. It should be defined by the pyramid app."""
+    if not request.content_length:
+        return None
+
     db_session = request.find_service(Session)
-    payload = request.json_body
-    # user_identity here could be an email, or username
-    user_identity = payload["user_identity"]
-    user = (
-        db_session.query(User)
-        .filter(or_(User.email == user_identity, User.name == user_identity))
-        .first()
-    )
+    try:
+        payload = request.json_body
+    except Exception:
+        return None
+
+    user_identity = payload.get("user_identity")
+    if not user_identity:
+        return None
+
+    user: User = db_session.query(User).filter(User.email == user_identity).one_or_none()
     if not user:
         return None
     return user.id

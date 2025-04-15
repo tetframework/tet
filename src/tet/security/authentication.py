@@ -756,6 +756,12 @@ class AuthViews:
         self._set_tokens(self.user_id)
         return response_payload
 
+    def jwt_token(self) -> str:
+        token = self.request.headers.get(self.long_term_token_header)
+        access_token = self._create_jwt(token)
+        self.response.headers[self.access_token_header] = access_token
+        return "ok"
+
     def cookie_login(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, None, Response]:
         response = self.login()
         if isinstance(response, dict) and response.get("mfa_required"):
