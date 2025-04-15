@@ -795,10 +795,13 @@ class AuthViews:
         self._set_tokens(user_id)
         if isinstance(self.security_policy, JWTCookieAuthenticationPolicy):
             self._set_cookie(
-                name=self.long_term_token_cookie_name,
-                value=self.response.headers[self.long_term_token_header],
-                max_age=self.long_term_token_expiration_mins * 60,
-                path=f"{self.route_prefix}/",
+                cookie_attrs=self.cookie_attributes
+                or CookieAttributes(
+                    name=self.long_term_token_cookie_name,
+                    value=self.response.headers[self.long_term_token_header],
+                    max_age=self.long_term_token_expiration_mins * 60,
+                    path=f"{self.route_prefix}/",
+                )
             )
         return {"success": is_valid}
 

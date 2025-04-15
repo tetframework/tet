@@ -10,7 +10,7 @@ from pyramid.testing import setUp, tearDown
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from tests.models.accounts import Base, Token, User
+from tests.models.accounts import Base, Token, User, MultiFactorAuthenticationMethod
 from tet.config import Configurator as tetConfigurator
 from tet.security.authentication import TokenAuthenticationPolicy, JWTCookieAuthenticationPolicy
 from tet.view import view_config
@@ -152,6 +152,8 @@ def pyramid_app(security_policy, pyramid_config):
         login_callback=login_callback,
         jwk_resolver=jwk_resolver,
         security_policy=security_policy(),
+        user_model=User,
+        multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
     )
     pyramid_config.add_route("home", "/")
     pyramid_config.add_view(

@@ -1,7 +1,7 @@
-from tet.security.authentication import TokenMixin
+from tet.security.authentication import TokenMixin, MultiFactorAuthenticationMethodMixin
 from tet.sqlalchemy.password import UserPasswordMixin
 
-from sqlalchemy import Column, Integer, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, Text, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy import orm
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import MetaData
@@ -31,6 +31,17 @@ class Token(TokenMixin, Base):
     __tablename__ = "token"
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     user = orm.relationship(User, backref="tokens")
+
+
+class MultiFactorAuthenticationMethod(MultiFactorAuthenticationMethodMixin, Base):
+    __tablename__ = "multi_factor_authentication_method"
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    user = orm.relationship(User, backref="multi_factor_authentication_methods")
+
+    # Unique constraint on (user_id, method_type)
+    __table_args__ = (
+        UniqueConstraint("user_id", "method_type", name="unique_mfa_method_type_per_user"),
+    )
 
 
 __all__ = ["User", "Token", "Base", "metadata"]
