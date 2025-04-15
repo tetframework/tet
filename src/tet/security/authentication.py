@@ -31,7 +31,6 @@ __all__ = [
     "MultiFactorAuthenticationMethodMixin",
     "TetMultiFactorAuthenticationService",
     "TOTPData",
-    "CookieAttributes",
 ]
 
 
@@ -192,25 +191,10 @@ DEFAULT_UNAUTHORIZED_MESSAGE = """Access denied. You are not authorised to acces
 Please ensure that your credientials are correct and try again.
 """
 
-
-@dataclasses.dataclass
-class CookieAttributes:
-    name: str = None
-    value: tp.Optional[str] = None
-    max_age: tp.Optional[int | timedelta] = None
-    domain: tp.Optional[str] = None
-    path: str = DEFAULT_PATH
-    secure: bool = False
-    httponly: bool = False
-    samesite: str = "Lax"
-    overwrite: bool = True
-
-
 DEFAULT_LOGIN_VIEW = "login"
 COOKIE_LOGIN_VIEW = "cookie_login"
 DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
 DEFAULT_SECURITY_POLICY = TokenAuthenticationPolicy()
-DEFAULT_COOKIE_ATTRIBUTES = CookieAttributes()
 UTC = timezone.utc
 DEFAULT_EXPIRY_TIMESTAMP = datetime.now(UTC) + timedelta(hours=12)
 
@@ -251,9 +235,8 @@ def set_token_authentication(
     access_token_header: str = DEFAULT_ACCESS_TOKEN_NAME,
     long_term_token_header: str = DEFAULT_LONG_TERM_TOKEN_NAME,
     long_term_token_cookie_name: str = DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
-    jwt_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
+    default_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
     refresh_token_route: str = DEFAULT_REFRESH_TOKEN_ROUTE,
-    cookie_attributes: tp.Optional[CookieAttributes] = None,
     security_policy: tp.Optional[
         tp.Union[type["TokenAuthenticationPolicy"], type["JWTCookieAuthenticationPolicy"]]
     ] = DEFAULT_SECURITY_POLICY,
@@ -324,7 +307,7 @@ def set_token_authentication(
         jwt_token_expiration_mins: JWT expiration time in minutes (default: 15).
         access_token_header: The header name for the access token (default: ``"X-Access-Token"``).
         long_term_token_header: The header name for the long-term token (default: ``"X-Long-Token"``).
-        jwt_claims: Default JWT registered claims to include in the token payload.
+        default_claims: Default JWT registered claims to include in the token payload.
         security_policy: A custom security policy to use for token authentication.
     """
 
@@ -337,8 +320,7 @@ def set_token_authentication(
         config.registry.tet_auth_access_token_header = access_token_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
         config.registry.tet_auth_long_term_token_cookie_name = long_term_token_cookie_name
-        config.registry.tet_auth_jwt_claims = jwt_claims
-        config.registry.tet_auth_cookie_attributes = cookie_attributes
+        config.registry.tet_auth_default_claims = default_claims
 
         config.registry.tet_auth_login_callback = login_callback
         config.registry.tet_auth_jwk_resolver = jwk_resolver
@@ -557,7 +539,7 @@ class TetTokenService(RequestScopedBaseService):
         self.user_id_column: str = self.registry.tet_auth_user_id_column
         self.jwt_expiration_mins: int = self.registry.tet_auth_jwt_expiration_mins
         self.jwt_algorithm: str = self.registry.tet_auth_jwt_algorithm
-        self.jwt_claims: JWTRegisteredClaims = self.registry.tet_auth_jwt_claims
+        self.default_claims: JWTRegisteredClaims = self.registry.tet_auth_default_claims
 
     def create_long_term_token(
         self,
@@ -650,7 +632,7 @@ class TetTokenService(RequestScopedBaseService):
         if not user_id:
             raise ValueError("User ID is required")
 
-        payload = self.jwt_claims
+        payload = self.default_claims
         payload.user_id = user_id
         payload.iat = datetime.now(UTC)
         payload.exp = payload.iat + timedelta(minutes=self.jwt_expiration_mins)
@@ -676,10 +658,10 @@ class TetTokenService(RequestScopedBaseService):
                 token,
                 self.registry.tet_auth_jwk_resolver(self.request),
                 algorithms=[self.jwt_algorithm],
-                leeway=self.jwt_claims.leeway,
-                audience=self.jwt_claims.aud,
-                subject=self.jwt_claims.sub,
-                issuer=self.jwt_claims.iss,
+                leeway=self.default_claims.leeway,
+                audience=self.default_claims.aud,
+                subject=self.default_claims.sub,
+                issuer=self.default_claims.iss,
             )
             return payload
         except jwt.ExpiredSignatureError:
@@ -709,17 +691,30 @@ class AuthViews:
         self.login_callback = self.registry.tet_auth_login_callback
         self.user_id = self.login_callback(self.request)
         self.security_policy = self.registry.tet_auth_security_policy
-        self.cookie_attributes: tp.Optional[CookieAttributes] = (
-            self.registry.tet_auth_cookie_attributes
-        )
 
     def _set_cookie(
         self,
-        cookie_attrs: CookieAttributes,
+        name,
+        value,
+        max_age,
+        domain=None,
+        secure=True,
+        httponly=True,
+        samesite="Lax",
+        overwrite=True,
+        path=DEFAULT_PATH,
         **kwargs,
     ):
         self.response.set_cookie(
-            **cookie_attrs.__dict__,
+            name=name,
+            value=value,
+            max_age=max_age,
+            domain=domain,
+            secure=secure,
+            httponly=httponly,
+            samesite=samesite,
+            overwrite=overwrite,
+            path=path,
             **kwargs,
         )
 
@@ -731,12 +726,10 @@ class AuthViews:
         except ValueError as e:
             logger.exception(f"Error validating token: {e}")
             self._set_cookie(
-                cookie_attrs=CookieAttributes(
-                    name=self.long_term_token_cookie_name,
-                    value=None,
-                    path=f"{self.route_prefix}/",
-                    max_age=None,
-                )
+                name=self.long_term_token_cookie_name,
+                value=None,
+                path=f"{self.route_prefix}/",
+                max_age=None,
             )
             raise HTTPUnauthorized() from e
 
@@ -766,13 +759,10 @@ class AuthViews:
         if isinstance(response, dict) and response.get("mfa_required"):
             return response
         self._set_cookie(
-            cookie_attrs=self.cookie_attributes
-            or CookieAttributes(
-                name=self.long_term_token_cookie_name,
-                value=self.response.headers[self.long_term_token_header],
-                max_age=self.long_term_token_expiration_mins * 60,
-                path=f"{self.route_prefix}/",
-            ),
+            name=self.long_term_token_cookie_name,
+            value=self.response.headers[self.long_term_token_header],
+            max_age=self.long_term_token_expiration_mins * 60,
+            path=f"{self.route_prefix}/",
         )
         return response
 
@@ -794,13 +784,10 @@ class AuthViews:
         self._set_tokens(user_id)
         if isinstance(self.security_policy, JWTCookieAuthenticationPolicy):
             self._set_cookie(
-                cookie_attrs=self.cookie_attributes
-                or CookieAttributes(
-                    name=self.long_term_token_cookie_name,
-                    value=self.response.headers[self.long_term_token_header],
-                    max_age=self.long_term_token_expiration_mins * 60,
-                    path=f"{self.route_prefix}/",
-                )
+                name=self.long_term_token_cookie_name,
+                value=self.response.headers[self.long_term_token_header],
+                max_age=self.long_term_token_expiration_mins * 60,
+                path=f"{self.route_prefix}/",
             )
         return {"success": is_valid}
 
