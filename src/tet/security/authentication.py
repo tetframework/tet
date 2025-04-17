@@ -775,8 +775,9 @@ class AuthViews:
         response = self.login()
         if isinstance(response, dict) and response.get("mfa_required"):
             return response
+        if self.cookie_attributes:
+            self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
 
-        self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
         self._set_cookie(
             cookie_attrs=self.cookie_attributes
             or CookieAttributes(
@@ -809,7 +810,9 @@ class AuthViews:
             isinstance(self.security_policy, JWTCookieAuthenticationPolicy)
             and self.request.matched_route.name == "tet_auth_mfa_challenge"
         ):
-            self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
+            if self.cookie_attributes:
+                self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
+
             self._set_cookie(
                 cookie_attrs=self.cookie_attributes
                 or CookieAttributes(
