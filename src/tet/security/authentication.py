@@ -485,7 +485,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             return existing_method
 
         new_mfa_method = self.tet_multi_factor_auth_method_model(
-            method_type=method_type, user_id=user_id, data=data
+            method_type=method_type.value, user_id=user_id, data=data
         )
 
         self.session.add(new_mfa_method)
