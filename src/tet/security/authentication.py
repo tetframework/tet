@@ -724,6 +724,13 @@ class AuthViews:
             **kwargs,
         )
 
+    def _delete_cookie(self, *, name: str, path: str = "/", **kwargs):
+        self.response.delete_cookie(
+            name=name,
+            path=path,
+            **kwargs,
+        )
+
     def _create_jwt(self, refresh_token: str) -> str:
         try:
             token_from_db = self.token_service.retrieve_and_validate_token(
@@ -731,13 +738,9 @@ class AuthViews:
             )
         except ValueError as e:
             logger.exception(f"Error validating token: {e}")
-            self._set_cookie(
-                cookie_attrs=CookieAttributes(
-                    name=self.long_term_token_cookie_name,
-                    value=None,
-                    path=f"{self.route_prefix}/",
-                    max_age=None,
-                )
+            self._delete_cookie(
+                name=self.long_term_token_cookie_name,
+                path=f"{self.route_prefix}/",
             )
             raise HTTPUnauthorized() from e
 
@@ -799,7 +802,11 @@ class AuthViews:
         mfa_method.verified = True
 
         self._set_tokens(user_id)
-        if isinstance(self.security_policy, JWTCookieAuthenticationPolicy):
+
+        if (
+            isinstance(self.security_policy, JWTCookieAuthenticationPolicy)
+            and self.request.matched_route.name == "tet_auth_mfa_challenge"
+        ):
             self._set_cookie(
                 cookie_attrs=self.cookie_attributes
                 or CookieAttributes(
