@@ -475,8 +475,8 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         """
         existing_method = (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, method_type=method_type)
-            .first()
+            .filter_by(user_id=user_id, method_type=method_type.value)
+            .one_or_none()
         )
 
         if existing_method:
@@ -497,7 +497,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         Disable a multi-factor authentication method for a user.
         """
         self.session.query(self.tet_multi_factor_auth_method_model).filter_by(
-            user_id=user_id, method_type=method_type
+            user_id=user_id, method_type=method_type.value
         ).update({"is_active": False})
 
     @staticmethod
@@ -514,8 +514,8 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, method_type=method_type, is_active=True)
-            .first()
+            .filter_by(user_id=user_id, method_type=method_type.value, is_active=True)
+            .one_or_none()
         )
 
     def get_active_methods_by_user_id(self, *, user_id: tp.Any):
