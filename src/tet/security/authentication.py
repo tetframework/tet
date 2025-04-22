@@ -777,6 +777,8 @@ class AuthViews:
             return response
         if self.cookie_attributes:
             self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
+            if not self.cookie_attributes.max_age:
+                self.cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
 
         self._set_cookie(
             cookie_attrs=self.cookie_attributes
@@ -812,6 +814,8 @@ class AuthViews:
         ):
             if self.cookie_attributes:
                 self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
+                if not self.cookie_attributes.max_age:
+                    self.cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
 
             self._set_cookie(
                 cookie_attrs=self.cookie_attributes
