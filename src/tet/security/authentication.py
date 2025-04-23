@@ -513,14 +513,21 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         return totp.verify(token)
 
     def get_method(
-        self, *, user_id: tp.Any, method_type: MultiFactorAuthMethodType, is_active: bool = True
+        self,
+        *,
+        user_id: tp.Any,
+        method_type: MultiFactorAuthMethodType,
+        is_active: bool = True,
+        verified: bool = True,
     ):
         """
         Retrieve a multi-factor authentication method for a user.
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, method_type=method_type, is_active=is_active)
+            .filter_by(
+                user_id=user_id, method_type=method_type, is_active=is_active, verified=verified
+            )
             .one_or_none()
         )
 
