@@ -798,11 +798,11 @@ class AuthViews:
         )
         return response
 
-    def _verify_totp_by_user_id(self, user_id: tp.Any) -> dict:
+    def _verify_totp_by_user_id(self, user_id: tp.Any, verified: bool = True) -> dict:
         payload = self.request.json_body
         token = payload["token"]
         mfa_method = self.multi_factor_auth_service.get_method(
-            user_id=user_id, method_type=MultiFactorAuthMethodType.TOTP
+            user_id=user_id, method_type=MultiFactorAuthMethodType.TOTP, verified=verified
         )
         secret = mfa_method.data.get("secret")
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
@@ -844,7 +844,7 @@ class AuthViews:
         user_id = self.request.authenticated_userid
         if not user_id:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-        return self._verify_totp_by_user_id(user_id)
+        return self._verify_totp_by_user_id(user_id=user_id, verified=False)
 
     def jwt_token(self) -> str:
         token = self.request.headers.get(self.long_term_token_header)
