@@ -523,11 +523,16 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         """
         Retrieve a multi-factor authentication method for a user.
         """
+        conditions = [
+            self.tet_multi_factor_auth_method_model.user_id == user_id,
+            self.tet_multi_factor_auth_method_model.method_type == method_type,
+            self.tet_multi_factor_auth_method_model.is_active == is_active,
+        ]
+        if verified:
+            conditions.append(self.tet_multi_factor_auth_method_model.verified == verified)
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(
-                user_id=user_id, method_type=method_type, is_active=is_active, verified=verified
-            )
+            .filter(*conditions)
             .one_or_none()
         )
 
