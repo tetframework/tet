@@ -502,7 +502,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         """
         self.session.query(self.tet_multi_factor_auth_method_model).filter_by(
             user_id=user_id, method_type=method_type.value
-        ).update({"is_active": False})
+        ).update({"is_active": False, "verified": False})
 
     @staticmethod
     def verify_totp(secret: tp.Any, token: tp.Any) -> bool:
