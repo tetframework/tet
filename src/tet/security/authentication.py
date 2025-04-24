@@ -475,7 +475,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict
     ) -> tp.Any:
         """
-        Get or create a multi-factor authentication method for a user.
+        Get or create a multifactor authentication method for a user.
         """
         existing_method = (
             self.session.query(self.tet_multi_factor_auth_method_model)
@@ -484,7 +484,6 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         )
 
         if existing_method:
-            existing_method.data = data
             existing_method.is_active = True
             return existing_method
 
@@ -498,16 +497,16 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
 
     def disable_method(self, user_id: tp.Any, method_type: MultiFactorAuthMethodType):
         """
-        Disable a multi-factor authentication method for a user.
+        Disable a multifactor authentication method for a user.
         """
         self.session.query(self.tet_multi_factor_auth_method_model).filter_by(
             user_id=user_id, method_type=method_type.value
-        ).update({"is_active": False, "verified": False})
+        ).update({"is_active": False, "verified": False, "data": {}})
 
     @staticmethod
     def verify_totp(secret: tp.Any, token: tp.Any) -> bool:
         """
-        Verify a one-time password for multi-factor authentication.
+        Verify a one-time password for multifactor authentication.
         """
         totp = pyotp.TOTP(secret)
         return totp.verify(token)
@@ -521,7 +520,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         verified: bool = True,
     ):
         """
-        Retrieve a multi-factor authentication method for a user.
+        Retrieve a multifactor authentication method for a user.
         """
         conditions = [
             self.tet_multi_factor_auth_method_model.user_id == user_id,
@@ -538,7 +537,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
 
     def get_active_methods_by_user_id(self, *, user_id: tp.Any):
         """
-        Retrieve all multi-factor authentication methods by user id.
+        Retrieve all multifactor authentication methods by user id.
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
@@ -546,15 +545,16 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             .all()
         )
 
-    def is_mfa_enabled(self, user_id: tp.Any = None) -> bool:
+    def is_totp_mfa_enabled(self, user_id: tp.Any = None) -> bool:
         """
-        Check if multi-factor authentication is enabled for the user.
+        Check if multifactor authentication is enabled for the user.
         """
         return (
             self.session.query(self.tet_multi_factor_auth_method_model)
             .filter(
                 self.tet_multi_factor_auth_method_model.user_id == user_id,
                 self.tet_multi_factor_auth_method_model.is_active,
+                self.tet_multi_factor_auth_method_model.verified,
             )
             .count()
             > 0
@@ -574,19 +574,14 @@ class TetTokenService(RequestScopedBaseService):
         self.jwt_claims: JWTRegisteredClaims = self.registry.tet_auth_jwt_claims
 
     def create_long_term_token(
-        self,
-        user_id: tp.Any,
-        project_prefix: str,
-        expire_timestamp=DEFAULT_EXPIRY_TIMESTAMP,
-        description=None,
+        self, user_id: tp.Any, project_prefix: str, expire_timestamp=DEFAULT_EXPIRY_TIMESTAMP
     ) -> str:
         """
         Generates a long-term token for a user with a project-specific prefix and stores it in the database.
         Args:
             user_id: The ID of the user for whom the token is generated.
             project_prefix: A prefix indicating the project this token is for.
-            expire_timestamp: (Optional) Expiration timestamp for the token.
-            description: (Optional) Description for the token.
+            Expire_timestamp: (Optional) Expiration timestamp for the token.
 
         Returns:
             The plaintext long-term token with the project-specific prefix.
@@ -770,7 +765,7 @@ class AuthViews:
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
         response_payload = {"success": True}
-        if self.multi_factor_auth_service.is_mfa_enabled(self.user_id):
+        if self.multi_factor_auth_service.is_totp_mfa_enabled(self.user_id):
             response_payload["mfa_required"] = True
             return response_payload
 
@@ -841,14 +836,37 @@ class AuthViews:
         return {"success": is_valid}
 
     def mfa_challenge(self) -> dict:
+        """
+        Perform a multi-factor authentication (MFA) challenge during the login phase.
+
+        This method verifies a time-based one-time password (TOTP) for the current user.
+        It raises an HTTP 401 error if no user ID is available, indicating that the
+        user is not authenticated.
+
+        Returns:
+            dict: A dictionary with the verification result of the TOTP challenge.
+        """
         if self.user_id is None:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+
+        # We only support the TOTP method for now
         return self._verify_totp_by_user_id(self.user_id)
 
     def mfa_verify(self) -> dict:
+        """
+        Verifies the TOTP code for the currently authenticated user.
+
+        Raises:
+            HTTPUnauthorized: If no authenticated user ID is found in the request.
+
+        Returns:
+            dict: Result of the TOTP verification for the user.
+        """
         user_id = self.request.authenticated_userid
         if not user_id:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+
+        # We only support the TOTP method for now
         return self._verify_totp_by_user_id(user_id=user_id, verified=False)
 
     def jwt_token(self) -> str:
