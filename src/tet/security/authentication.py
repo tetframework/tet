@@ -896,7 +896,7 @@ def includeme(config: Configurator):
     config.add_route("tet_auth_login", "login")
     config.add_route("tet_auth_jwt", "access_token")
     config.add_route("tet_auth_refresh_token", "refresh_token")
-    config.add_route("tet_auth_mfa_challenge", "mfa_challenge")
+    config.add_route("tet_auth_mfa_challenge", "mfa-challenge")
     config.add_route("tet_auth_mfa_verify", "/mfa/app/verify")
     config.add_view(
         AuthViews,
