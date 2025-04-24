@@ -760,7 +760,7 @@ class AuthViews:
 
         return self.token_service.create_short_term_jwt(user_id)
 
-    def _set_tokens(self, user_id: str) -> None:
+    def _set_session_tokens(self, user_id: str) -> None:
         refresh_token = self.token_service.create_long_term_token(user_id, self.project_prefix)
         access_token = self.token_service.create_short_term_jwt(user_id)
         self.response.headers[self.long_term_token_header] = refresh_token
@@ -774,7 +774,7 @@ class AuthViews:
             response_payload["mfa_required"] = True
             return response_payload
 
-        self._set_tokens(self.user_id)
+        self._set_session_tokens(self.user_id)
         return response_payload
 
     def jwt_token(self) -> str:
@@ -818,7 +818,7 @@ class AuthViews:
         mfa_method.mark_used()
         mfa_method.verified = True
 
-        self._set_tokens(user_id)
+        self._set_session_tokens(user_id)
 
         if (
             isinstance(self.security_policy, JWTCookieAuthenticationPolicy)
