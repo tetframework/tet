@@ -8,7 +8,7 @@ from webtest import TestApp
 from tests.models.accounts import User
 from tet.security.authentication import TetTokenService, JWTCookieAuthenticationPolicy
 
-ACCESS_TOKEN_ENDPOINT = "/api/v1/auth/access_token"
+ACCESS_TOKEN_ENDPOINT = "/api/v1/auth/access-token"
 LONG_TERM_TOKEN_ENDPOINT = "/api/v1/auth/login"
 LONG_TERM_TOKEN_HEADER_NAME = "x-long-token"
 ACCESS_TOKEN_HEADER_NAME = "x-access-token"
