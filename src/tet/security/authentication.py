@@ -484,7 +484,6 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         )
 
         if existing_method:
-            existing_method.is_active = True
             return existing_method
 
         new_mfa_method = self.tet_multi_factor_auth_method_model(
@@ -525,8 +524,9 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         conditions = [
             self.tet_multi_factor_auth_method_model.user_id == user_id,
             self.tet_multi_factor_auth_method_model.method_type == method_type,
-            self.tet_multi_factor_auth_method_model.is_active == is_active,
         ]
+        if is_active:
+            conditions.append(self.tet_multi_factor_auth_method_model.is_active == is_active)
         if verified:
             conditions.append(self.tet_multi_factor_auth_method_model.verified == verified)
         return (
@@ -798,27 +798,33 @@ class AuthViews:
         )
         return response
 
-    def _verify_totp_by_user_id(self, user_id: tp.Any, verified: bool = True) -> dict:
+    def _verify_totp_by_user_id(
+        self, user_id: tp.Any, is_active: bool = True, verified: bool = True
+    ) -> dict:
         payload = self.request.json_body
         token = payload["token"]
-        mfa_method = self.multi_factor_auth_service.get_method(
-            user_id=user_id, method_type=MultiFactorAuthMethodType.TOTP, verified=verified
+        totp_mfa_method = self.multi_factor_auth_service.get_method(
+            user_id=user_id,
+            method_type=MultiFactorAuthMethodType.TOTP,
+            is_active=is_active,
+            verified=verified,
         )
-        secret = mfa_method.data.get("secret") if verified else payload["setup_key"]
+        secret = totp_mfa_method.data.get("secret") if verified else payload["setup_key"]
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
 
         if not is_valid:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
-        mfa_method.mark_used()
+        totp_mfa_method.mark_used()
 
         if not verified:
             data = TOTPData(
                 secret=secret,
                 issuer=self.project_prefix,
             )
-            mfa_method.verified = True
-            mfa_method.data = data.to_dict()
+            totp_mfa_method.verified = True
+            totp_mfa_method.is_active = True
+            totp_mfa_method.data = data.to_dict()
 
         self._set_session_tokens(user_id)
 
@@ -873,7 +879,7 @@ class AuthViews:
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
         # We only support the TOTP method for now
-        return self._verify_totp_by_user_id(user_id=user_id, verified=False)
+        return self._verify_totp_by_user_id(user_id=user_id, verified=False, is_active=False)
 
     def jwt_token(self) -> str:
         token = self.request.headers.get(self.long_term_token_header)
