@@ -811,7 +811,14 @@ class AuthViews:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
         mfa_method.mark_used()
-        mfa_method.verified = True
+
+        if not verified:
+            data = TOTPData(
+                secret=secret,
+                issuer=self.project_prefix,
+            )
+            mfa_method.verified = True
+            mfa_method.data = data.to_dict()
 
         self._set_session_tokens(user_id)
 
