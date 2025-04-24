@@ -430,7 +430,7 @@ class MultiFactorAuthenticationMethodMixin:
         index=True,
     )
     data = Column(JSONB, nullable=False, default=dict)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
     verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(True), default=lambda: datetime.now(UTC))
     last_used_at = Column(DateTime(True), nullable=True)
