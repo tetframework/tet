@@ -804,7 +804,7 @@ class AuthViews:
         mfa_method = self.multi_factor_auth_service.get_method(
             user_id=user_id, method_type=MultiFactorAuthMethodType.TOTP, verified=verified
         )
-        secret = mfa_method.data.get("secret")
+        secret = mfa_method.data.get("secret") if verified else payload["setup_key"]
         is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
 
         if not is_valid:
@@ -824,15 +824,14 @@ class AuthViews:
                 if not self.cookie_attributes.max_age:
                     self.cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
 
-            self._set_cookie(
-                cookie_attrs=self.cookie_attributes
-                or CookieAttributes(
-                    name=self.long_term_token_cookie_name,
-                    value=self.response.headers[self.long_term_token_header],
-                    max_age=self.long_term_token_expiration_mins * 60,
-                    path=f"{self.route_prefix}/",
-                )
+            cookie_attrs = self.cookie_attributes or CookieAttributes(
+                name=self.long_term_token_cookie_name,
+                value=self.response.headers[self.long_term_token_header],
+                max_age=self.long_term_token_expiration_mins * 60,
+                path=f"{self.route_prefix}/",
             )
+
+            self._set_cookie(cookie_attrs=cookie_attrs)
         return {"success": is_valid}
 
     def mfa_challenge(self) -> dict:
