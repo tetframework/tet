@@ -208,7 +208,6 @@ DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
 DEFAULT_SECURITY_POLICY = TokenAuthenticationPolicy()
 DEFAULT_COOKIE_ATTRIBUTES = CookieAttributes()
 UTC = timezone.utc
-DEFAULT_EXPIRY_TIMESTAMP = datetime.now(UTC) + timedelta(hours=12)
 
 
 class ILoginCallback(tp.Protocol):
@@ -574,7 +573,7 @@ class TetTokenService(RequestScopedBaseService):
         self.jwt_claims: JWTRegisteredClaims = self.registry.tet_auth_jwt_claims
 
     def create_long_term_token(
-        self, user_id: tp.Any, project_prefix: str, expire_timestamp=DEFAULT_EXPIRY_TIMESTAMP
+        self, user_id: tp.Any, project_prefix: str, expire_timestamp: tp.Optional[datetime] = None
     ) -> str:
         """
         Generates a long-term token for a user with a project-specific prefix and stores it in the database.
@@ -586,6 +585,9 @@ class TetTokenService(RequestScopedBaseService):
         Returns:
             The plaintext long-term token with the project-specific prefix.
         """
+        if not expire_timestamp:
+            expire_timestamp = datetime.now(UTC) + timedelta(hours=12)
+
         secret = secrets.token_bytes(32)
         hashed_secret = hashlib.sha256(secret).digest()
 
