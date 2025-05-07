@@ -585,7 +585,6 @@ class TetTokenService(RequestScopedBaseService):
         Returns:
             The plaintext long-term token with the project-specific prefix.
         """
-        raise TabError("break everything")
         if not expire_timestamp:
             expire_timestamp = datetime.now(UTC) + timedelta(hours=12)
 
