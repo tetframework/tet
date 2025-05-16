@@ -11,7 +11,14 @@ import pyotp
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.authorization import ACLHelper
 from pyramid.config import Configurator
-from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized, HTTPFound
+from pyramid.httpexceptions import (
+    HTTPForbidden,
+    HTTPUnauthorized,
+    HTTPFound,
+    HTTPBadRequest,
+    HTTPException,
+    HTTPInternalServerError,
+)
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import Request, Response
 from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
@@ -803,51 +810,69 @@ class AuthViews:
     def _verify_totp_by_user_id(
         self, user_id: tp.Any, is_active: bool = True, verified: bool = True
     ) -> dict:
-        payload = self.request.json_body
-        token = payload["token"]
-        totp_mfa_method = self.multi_factor_auth_service.get_method(
-            user_id=user_id,
-            method_type=MultiFactorAuthMethodType.TOTP,
-            is_active=is_active,
-            verified=verified,
-        )
-        secret = totp_mfa_method.data.get("secret") if verified else payload["setup_key"]
-        is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
-
-        if not is_valid:
-            raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
-
-        totp_mfa_method.mark_used()
-
-        if not verified:
-            data = TOTPData(
-                secret=secret,
-                issuer=self.project_prefix,
+        try:
+            payload = self.request.json_body
+            token = payload["token"]
+            totp_mfa_method = self.multi_factor_auth_service.get_method(
+                user_id=user_id,
+                method_type=MultiFactorAuthMethodType.TOTP,
+                is_active=is_active,
+                verified=verified,
             )
-            totp_mfa_method.verified = True
-            totp_mfa_method.is_active = True
-            totp_mfa_method.data = data.to_dict()
+            secret = totp_mfa_method.data.get("secret") if verified else payload.get("setup_key")
 
-        self._set_session_tokens(user_id)
+            if not secret:
+                raise HTTPBadRequest(json_body={"message": "Missing TOTP secret."})
 
-        if (
-            isinstance(self.security_policy, JWTCookieAuthenticationPolicy)
-            and self.request.matched_route.name == "tet_auth_mfa_challenge"
-        ):
-            if self.cookie_attributes:
-                self.cookie_attributes.value = self.response.headers[self.long_term_token_header]
-                if not self.cookie_attributes.max_age:
-                    self.cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
+            is_valid = self.multi_factor_auth_service.verify_totp(secret=secret, token=token)
 
-            cookie_attrs = self.cookie_attributes or CookieAttributes(
-                name=self.long_term_token_cookie_name,
-                value=self.response.headers[self.long_term_token_header],
-                max_age=self.long_term_token_expiration_mins * 60,
-                path=f"{self.route_prefix}/",
-            )
+            if not is_valid:
+                raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
-            self._set_cookie(cookie_attrs=cookie_attrs)
-        return {"success": is_valid}
+            totp_mfa_method.mark_used()
+
+            if not verified:
+                data = TOTPData(
+                    secret=secret,
+                    issuer=self.project_prefix,
+                )
+                totp_mfa_method.verified = True
+                totp_mfa_method.is_active = True
+                totp_mfa_method.data = data.to_dict()
+
+            self._set_session_tokens(user_id)
+
+            if (
+                isinstance(self.security_policy, JWTCookieAuthenticationPolicy)
+                and self.request.matched_route.name == "tet_auth_mfa_challenge"
+            ):
+                if self.cookie_attributes:
+                    self.cookie_attributes.value = self.response.headers[
+                        self.long_term_token_header
+                    ]
+                    if not self.cookie_attributes.max_age:
+                        self.cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
+
+                cookie_attrs = self.cookie_attributes or CookieAttributes(
+                    name=self.long_term_token_cookie_name,
+                    value=self.response.headers[self.long_term_token_header],
+                    max_age=self.long_term_token_expiration_mins * 60,
+                    path=f"{self.route_prefix}/",
+                )
+
+                self._set_cookie(cookie_attrs=cookie_attrs)
+            return {"success": is_valid}
+
+        except KeyError as e:
+            raise HTTPBadRequest(
+                json_body={"message": "Missing required field.", "details": str(e)}
+            ) from e
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPInternalServerError(
+                json_body={"message": "TOTP verification failed.", "details": str(e)}
+            ) from e
 
     def mfa_challenge(self) -> dict:
         """
