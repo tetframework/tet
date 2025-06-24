@@ -3,11 +3,12 @@ import enum
 import hashlib
 import logging
 import secrets
+import requests
 import typing as tp
-from datetime import datetime, timedelta, timezone
-
 import jwt
 import pyotp
+
+from datetime import datetime, timedelta, timezone
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.authorization import ACLHelper
 from pyramid.config import Configurator
@@ -23,6 +24,7 @@ from pyramid.request import Request
 from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
 from pyramid_di import RequestScopedBaseService, autowired
 from sqlalchemy import Column, DateTime, Integer, String, Enum, Boolean
+from sqlalchemy.sql import delete
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from zope.interface import Interface, implementer
@@ -40,6 +42,12 @@ __all__ = [
     "TOTPData",
     "CookieAttributes",
 ]
+
+
+@dataclasses.dataclass
+class PasswordChangeData:
+    current_password: str
+    new_password: str
 
 
 @dataclasses.dataclass
@@ -219,6 +227,10 @@ DEFAULT_REGISTERED_CLAIMS = JWTRegisteredClaims()
 DEFAULT_SECURITY_POLICY = TokenAuthenticationPolicy()
 DEFAULT_COOKIE_ATTRIBUTES = CookieAttributes()
 UTC = timezone.utc
+MIN_PASSWORD_LENGTH = 12
+MAX_PASSWORD_LENGTH = 128
+MIN_SCORE = 2
+KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM = "settings.profile.changePasswordForm"
 
 
 class ILoginCallback(tp.Protocol):
@@ -458,12 +470,13 @@ class TokenMixin:
 
 
 class TetTokenService(RequestScopedBaseService):
-    session: Session = autowired(Session)
+    db_session: Session = autowired(Session)
 
     def __init__(self, request: Request):
         super().__init__(request=request)
-
+        self.project_prefix: str = self.registry.tet_auth_project_prefix
         self.long_term_token_model: tp.Any = self.registry.tet_auth_long_term_token_model
+        self.long_term_token_cookie_name: str = self.registry.tet_auth_long_term_token_cookie_name
         self.user_id_column: str = self.registry.tet_auth_user_id_column
         self.jwt_expiration_mins: int = self.registry.tet_auth_jwt_expiration_mins
         self.jwt_algorithm: str = self.registry.tet_auth_jwt_algorithm
@@ -495,8 +508,8 @@ class TetTokenService(RequestScopedBaseService):
         )
         setattr(stored_token, self.user_id_column, user_id)
 
-        self.session.add(stored_token)
-        self.session.flush()
+        self.db_session.add(stored_token)
+        self.db_session.flush()
 
         token_id = stored_token.id.to_bytes(8, "little")
         payload = token_id + secret
@@ -529,7 +542,7 @@ class TetTokenService(RequestScopedBaseService):
         token_id = int.from_bytes(token_id_bytes, "little")
 
         token_from_db = (
-            self.session.query(self.long_term_token_model)
+            self.db_session.query(self.long_term_token_model)
             .filter(self.long_term_token_model.id == token_id)
             .one_or_none()
         )
@@ -593,9 +606,28 @@ class TetTokenService(RequestScopedBaseService):
         except jwt.ExpiredSignatureError:
             return None
 
+    def _get_current_token(self) -> tp.Any:
+        return self.retrieve_and_validate_token(
+            token=self.request.cookies.get(self.long_term_token_cookie_name),
+            prefix=self.project_prefix,
+        )
+
+    def _delete_execution(self, condition: list) -> None:
+        stmt = delete(self.long_term_token_model).where(*condition)
+        self.db_session.execute(stmt)
+        self.db_session.flush()
+
+    def delete_other_tokens(self, *, user: tp.Any = None) -> None:
+        current_token = self._get_current_token()
+        condition = [
+            self.long_term_token_model.user_id == user.id,
+            self.long_term_token_model.id != current_token.id,
+        ]
+        self._delete_execution(condition)
+
 
 class TetAuthService(RequestScopedBaseService):
-    session: Session = autowired(Session)
+    db_session: Session = autowired(Session)
     token_service = autowired(TetTokenService)
 
     def __init__(self, request: Request):
@@ -605,6 +637,7 @@ class TetAuthService(RequestScopedBaseService):
         self.long_term_token_expiration_mins = (
             self.registry.tet_auth_long_term_token_expiration_mins
         )
+        self.user_model: tp.Any = self.registry.tet_auth_user_model
 
     def set_cookies(
         self,
@@ -653,6 +686,68 @@ class TetAuthService(RequestScopedBaseService):
         user_id = getattr(token_from_db, self.token_service.user_id_column)
 
         return self.token_service.create_short_term_jwt(user_id)
+
+    def verify_password(self, user: tp.Any, password: str) -> bool:
+        return user.verify_password(password)
+
+    def is_password_breached(self, password: str) -> bool:
+        sha1_hash = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+        prefix, suffix = sha1_hash[:5], sha1_hash[5:]
+        url = f"{self.request.registry.settings['pwned_passwords_api_url']}{prefix}"
+        response = requests.get(url)
+        response.raise_for_status()
+
+        for line in response.text.splitlines():
+            hash_suffix, count = line.split(":")
+            if hash_suffix == suffix:
+                return True
+        return False
+
+    @staticmethod
+    def assess_password_strength(password: str) -> int:
+        strength = 0
+        if len(password) > 0:
+            strength += 1
+        if len(password) >= MIN_PASSWORD_LENGTH:
+            strength += 4
+        return strength
+
+    def get_current_user(self, user_id: tp.Any) -> tp.Optional[tp.Any]:
+        return (
+            self.db_session.query(self.user_model)
+            .filter(self.user_model.id == user_id)
+            .one_or_none()
+        )
+
+    def change_password(self, payload: PasswordChangeData, user: tp.Any) -> dict:
+        self.password_change_validation(payload=payload, user=user)
+        user.password = payload.new_password
+        self.db_session.flush()
+
+    def password_change_validation(self, payload: PasswordChangeData, user: tp.Any) -> bool:
+        if self.is_password_breached(payload.new_password):
+            raise ValueError(
+                f"{KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM}.PASSWORD_LEAKED_EASY_TO_GUESS"
+            )
+
+        validations = [
+            (
+                self.assess_password_strength(payload.new_password) >= MIN_SCORE,
+                f"{KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM}.PASSWORD_STRENGTH_TOO_WEAK",
+            ),
+            (
+                MIN_PASSWORD_LENGTH <= len(payload.new_password) <= MAX_PASSWORD_LENGTH,
+                f"{KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM}.INCORRECT_PASSWORD_LENGTH",
+            ),
+            (
+                self.verify_password(user=user, password=payload.current_password),
+                f"{KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM}.INVALID_CREDENTIALS",
+            ),
+        ]
+        for condition, error_message in validations:
+            if not condition:
+                raise ValueError(error_message)
+        return True
 
 
 class TetMultiFactorAuthenticationService(RequestScopedBaseService):
@@ -937,12 +1032,37 @@ class AuthViews:
         )
         return {"success": True, "access_token": access_token}
 
+    def change_password(self):
+        user_id = self.request.authenticated_userid
+        if user_id is None:
+            raise HTTPUnauthorized(
+                json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE, "success": False}
+            )
+        data = self.request.json_body
+        payload = PasswordChangeData(
+            current_password=data["currentPassword"],
+            new_password=data["newPassword"],
+        )
+        user = self.auth_service.get_current_user(user_id)
+        response = self.auth_service.change_password(payload=payload, user=user)
+        self.token_service.delete_other_tokens(user=user)
+        return response
+
 
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
     config.add_route("tet_auth_login", "login")
     config.add_route("tet_auth_refresh_token", "/token/refresh")
     config.add_route("tet_auth_mfa_verify", "/mfa/app/verify")
+    config.add_route("tet_auth_change_password", "/users/me/password")
+    config.add_view(
+        AuthViews,
+        attr="change_password",
+        route_name="tet_auth_change_password",
+        request_method="POST",
+        renderer="json",
+        require_csrf=False,
+    )
     config.add_view(
         AuthViews,
         attr="refresh_token",
