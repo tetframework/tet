@@ -6,11 +6,9 @@ from sqlalchemy.orm import Session
 from webtest import TestApp
 
 from tests.models.accounts import User
-from tet.security.authentication import TetTokenService, JWTCookieAuthenticationPolicy
+from tet.security.authentication import TetTokenService
 
-ACCESS_TOKEN_ENDPOINT = "/api/v1/auth/access-token"
-LONG_TERM_TOKEN_ENDPOINT = "/api/v1/auth/login"
-LONG_TERM_TOKEN_HEADER_NAME = "x-long-token"
+LOGIN_ENDPOINT = "/api/v1/auth/login"
 ACCESS_TOKEN_HEADER_NAME = "x-access-token"
 LONG_TERM_TOKEN_COOKIE_NAME = "refresh-token"
 ACCESS_TOKEN_COOKIE_NAME = "access-token"
@@ -23,15 +21,19 @@ def pyramid_test_app(request, pyramid_app):
 
 
 @pytest.fixture()
-def long_term_token(pyramid_test_app, capture_token):
+def authentication_tokens(pyramid_test_app, capture_token, pyramid_request):
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = pyramid_test_app.post(
-        LONG_TERM_TOKEN_ENDPOINT,
+        LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
-    return response.headers[LONG_TERM_TOKEN_HEADER_NAME]
+    data = response.json
+    refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
+    refresh_token = get_cookie(pyramid_test_app.cookiejar, refresh_token_cookie_name)
+    access_token = data["access_token"]
+    return refresh_token, access_token
 
 
 def create_user(db_session: Session):
@@ -62,52 +64,60 @@ def capture_token(monkeypatch, token_service, db_session):
     captured_data = {}
 
     create_long_term_token = TetTokenService.create_long_term_token
+    create_short_term_jwt = TetTokenService.create_short_term_jwt
 
-    def wrapper(*args, **kwargs):
+    def create_long_term_token_wrapper(*args, **kwargs):
         token = create_long_term_token(*args, **kwargs)
-        captured_data["token"] = token
+        captured_data["refresh_token"] = token
         return token
 
-    monkeypatch.setattr(TetTokenService, "create_long_term_token", wrapper)
+    def create_short_term_jwt_wrapper(*args, **kwargs):
+        token = create_short_term_jwt(*args, **kwargs)
+        captured_data["access_token"] = token
+        return token
 
+    monkeypatch.setattr(TetTokenService, "create_long_term_token", create_long_term_token_wrapper)
+    monkeypatch.setattr(TetTokenService, "create_short_term_jwt", create_short_term_jwt_wrapper)
     return captured_data
 
 
-def test_login_view_should_return_long_term_token(pyramid_test_app, capture_token):
+def test_login_view_should_return_long_term_token(pyramid_test_app, capture_token, pyramid_request):
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = pyramid_test_app.post(
-        url=LONG_TERM_TOKEN_ENDPOINT,
+        url=LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
     assert response.status_code == 200
-
     # Validate the token captured by monkeypatch
-    refresh_token = response.headers[LONG_TERM_TOKEN_HEADER_NAME]
-    assert capture_token["token"] == refresh_token
+    refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
+    refresh_token = get_cookie(pyramid_test_app.cookiejar, refresh_token_cookie_name)
+    assert capture_token["refresh_token"] == refresh_token
 
     assert isinstance(refresh_token, str)
     assert len(refresh_token) > 0
 
 
-def test_auth_should_return_access_token(long_term_token, pyramid_test_app):
-    headers = {LONG_TERM_TOKEN_HEADER_NAME: long_term_token}
-    response = pyramid_test_app.get(ACCESS_TOKEN_ENDPOINT, headers=headers, status=200)
+def test_auth_should_return_access_token(pyramid_test_app, capture_token, pyramid_request):
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
+    response = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=data,
+        content_type="application/json",
+        status=200,
+    )
     assert response.status_code == 200
+    response_data = response.json
+    assert "success" in response_data
+    assert "access_token" in response_data
+    assert response_data["access_token"] == capture_token["access_token"]
 
-    assert "x-access-token" in response.headers
-    assert response.headers["x-access-token"] is not None
 
-
-def test_access_token_should_work_to_access_protected_route(long_term_token, pyramid_test_app):
-    headers = {"x-long-token": long_term_token}
-    response = pyramid_test_app.get(ACCESS_TOKEN_ENDPOINT, headers=headers, status=200)
-    assert response.status_code == 200
-
-    access_token = response.headers["x-access-token"]
-    assert access_token is not None
-
+def test_access_token_should_work_to_access_protected_route(
+    authentication_tokens, pyramid_test_app
+):
+    refresh_token, access_token = authentication_tokens
     headers = {"x-access-token": access_token}
     response = pyramid_test_app.get(HOME_ROUTE, headers=headers, status=200)
 
@@ -120,7 +130,7 @@ def test_login_view_should_raise_401_when_identity_not_found_in_the_db(
     pyramid_test_app, pyramid_request
 ):
     response = pyramid_test_app.post(
-        url=LONG_TERM_TOKEN_ENDPOINT,
+        url=LOGIN_ENDPOINT,
         params=json.dumps({"user_identity": "invalid_user", "password": "wrong_password"}),
         content_type="application/json",
         status=401,
@@ -136,17 +146,18 @@ def test_it_should_store_the_token_in_the_database(
     tet_token_service = TetTokenService(request=pyramid_request)
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = pyramid_test_app.post(
-        url=LONG_TERM_TOKEN_ENDPOINT,
+        url=LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
+    data = response.json
     assert response.status_code == 200
-    refresh_token = response.headers[LONG_TERM_TOKEN_HEADER_NAME]
+    refresh_token_cookie_name = pyramid_request.registry.tet_auth_long_term_token_cookie_name
+    refresh_token = get_cookie(pyramid_test_app.cookiejar, refresh_token_cookie_name)
     # Validate the token captured by monkeypatch
-    assert "token" in capture_token
-    assert capture_token["token"] == refresh_token
-
+    assert capture_token["refresh_token"] == refresh_token
+    assert capture_token["access_token"] == data["access_token"]
     assert isinstance(refresh_token, str)
     assert len(refresh_token) > 0
 
@@ -194,14 +205,14 @@ def test_login_view_should_return_refresh_token(
     app = pyramid_test_app_with_jwt_cookie_policy
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = app.post(
-        LONG_TERM_TOKEN_ENDPOINT,
+        LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
     refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
     assert response.status_code == 200
-    assert refresh_token == capture_token["token"]
+    assert refresh_token == capture_token["refresh_token"]
 
 
 def test_login_view_should_return_access_token(
@@ -211,16 +222,16 @@ def test_login_view_should_return_access_token(
     app = pyramid_test_app_with_jwt_cookie_policy
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = app.post(
-        LONG_TERM_TOKEN_ENDPOINT,
+        LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
+    data = response.json
     refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
     assert response.status_code == 200
-    assert refresh_token == capture_token["token"]
-    assert ACCESS_TOKEN_HEADER_NAME in response.headers
-    assert response.headers[ACCESS_TOKEN_HEADER_NAME] is not None
+    assert refresh_token == capture_token["refresh_token"]
+    assert capture_token["access_token"] == data["access_token"]
 
 
 def test_access_token_should_work_to_access_protected_route_with_new_policy(
@@ -230,17 +241,17 @@ def test_access_token_should_work_to_access_protected_route_with_new_policy(
     app = pyramid_test_app_with_jwt_cookie_policy
     data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     response = app.post(
-        LONG_TERM_TOKEN_ENDPOINT,
+        LOGIN_ENDPOINT,
         params=data,
         content_type="application/json",
         status=200,
     )
+    response_data = response.json
     refresh_token = get_cookie(app.cookiejar, refresh_token_cookie_name)
+    access_token = response_data.get("access_token")
     assert response.status_code == 200
-    assert refresh_token == capture_token["token"]
-
-    access_token = response.headers[ACCESS_TOKEN_HEADER_NAME]
-    assert access_token is not None
+    assert refresh_token == capture_token["refresh_token"]
+    assert capture_token["access_token"] == access_token
 
     headers = {ACCESS_TOKEN_HEADER_NAME: access_token}
     response = app.get(HOME_ROUTE, headers=headers, status=200)
