@@ -4,6 +4,10 @@ import hashlib
 import logging
 import secrets
 import requests
+import io
+import base64
+import qrcode
+import qrcode.image.svg
 import typing as tp
 import jwt
 import pyotp
@@ -21,6 +25,7 @@ from pyramid.httpexceptions import (
 )
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import Request
+from pyramid.response import Response
 from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
 from pyramid_di import RequestScopedBaseService, autowired
 from sqlalchemy import Column, DateTime, Integer, String, Enum, Boolean
@@ -625,6 +630,17 @@ class TetTokenService(RequestScopedBaseService):
         ]
         self._delete_execution(condition)
 
+    def delete_token(self, *, user: tp.Any = None) -> None:
+        current_token = self.retrieve_and_validate_token(
+            token=self.request.cookies.get(self.long_term_token_cookie_name),
+            prefix=self.project_prefix,
+        )
+        condition = [
+            self.long_term_token_model.user_id == user.id,
+            self.long_term_token_model.id == current_token.id,
+        ]
+        self._delete_execution(condition)
+
 
 class TetAuthService(RequestScopedBaseService):
     db_session: Session = autowired(Session)
@@ -720,9 +736,10 @@ class TetAuthService(RequestScopedBaseService):
         )
 
     def change_password(self, payload: PasswordChangeData, user: tp.Any) -> dict:
-        self.password_change_validation(payload=payload, user=user)
+        is_valid = self.password_change_validation(payload=payload, user=user)
         user.password = payload.new_password
         self.db_session.flush()
+        return is_valid
 
     def password_change_validation(self, payload: PasswordChangeData, user: tp.Any) -> bool:
         if self.is_password_breached(payload.new_password):
@@ -785,6 +802,17 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             method_type=method_type, user_id=user_id, data=data
         )
 
+        self.session.add(new_mfa_method)
+        self.session.flush()
+        return new_mfa_method
+
+    def create_method(self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict):
+        """
+        Create a new multifactor authentication method for a user.
+        """
+        new_mfa_method = self.tet_multi_factor_auth_method_model(
+            method_type=method_type, user_id=user_id, data=data
+        )
         self.session.add(new_mfa_method)
         self.session.flush()
         return new_mfa_method
@@ -948,6 +976,50 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                 json_body={"message": "TOTP verification failed.", "details": str(e)}
             ) from e
 
+    @staticmethod
+    def _create_totp_data(issuer: str) -> TOTPData:
+        secret = pyotp.random_base32()
+        return TOTPData(
+            secret=secret,
+            issuer=issuer,
+        )
+
+    @staticmethod
+    def generate_qr_img(user: tp.Any, mfa_secret: str, data: tp.Union[TOTPData]) -> str:
+        otp_uri = pyotp.totp.TOTP(mfa_secret).provisioning_uri(
+            name=user.display_name, issuer_name=data.issuer
+        )
+        factory = qrcode.image.svg.SvgImage
+        qr = qrcode.QRCode(box_size=15, border=4)
+        qr.add_data(otp_uri)
+        qr.make(fit=True)
+        img = qr.make_image(image_factory=factory)
+        buffer = io.BytesIO()
+        img.save(buffer)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    def handle_totp_setup(self, *, user: tp.Any, project_prefix: str) -> dict:
+        try:
+            data: TOTPData = self._create_totp_data(issuer=project_prefix)
+            existing_method = self.get_method(
+                user_id=user.id,
+                method_type=MultiFactorAuthMethodType.TOTP,
+                is_active=False,
+                verified=False,
+            )
+            if not existing_method:
+                self.create_method(
+                    method_type=MultiFactorAuthMethodType.TOTP,
+                    user_id=user.id,
+                    data=data.to_dict(),
+                )
+            mfa_secret = data.secret
+            img_str = self.generate_qr_img(user=user, mfa_secret=mfa_secret, data=data)
+            return {"secret": mfa_secret, "qr_code": f"data:image/svg+xml;base64,{img_str}"}
+        except Exception as e:
+            logger.exception(e)
+            return dict(success=False, message="Error generating TOTP method")
+
 
 class AuthViews:
     token_service: TetTokenService = autowired(TetTokenService)
@@ -1048,13 +1120,123 @@ class AuthViews:
         self.token_service.delete_other_tokens(user=user)
         return response
 
+    def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
+        try:
+            user_id = self.request.authenticated_userid
+            user = self.auth_service.get_current_user(user_id=user_id)
+            self.token_service.delete_token(user=user)
+            self.response.delete_cookie(
+                name=self.long_term_token_cookie_name,
+                path=f"{self.route_prefix}/",
+            )
+        except Exception as e:
+            logger.exception(e)
+            return HTTPForbidden(json_body={"message": "Failed to logout", "success": False})
+        return {"success": True}
+
+    def disable_mfa_method(self):
+        user_id = self.request.authenticated_userid
+        if user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        payload = self.request.json_body
+        mfa_method_type = MultiFactorAuthMethodType(payload["method_type"])
+        if not mfa_method_type:
+            raise HTTPForbidden(json_body={"message": "Invalid MFA method type"})
+        try:
+            self.multi_factor_auth_service.disable_method(
+                user_id=user_id, method_type=mfa_method_type
+            )
+        except Exception as e:
+            logger.exception(e)
+            return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
+        return {"success": True}
+
+    def revoke_other_tokens(self):
+        user_id = self.request.authenticated_userid
+        user = self.auth_service.get_current_user(user_id=user_id)
+        payload = self.request.json_body
+        if user is None or not self.auth_service.verify_password(
+            user=user, password=payload.get("password", "")
+        ):
+            raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
+        self.token_service.delete_other_tokens(user=user)
+        return {"success": True}
+
+    def get_mfa_methods(self) -> dict[str, tp.List[tp.Any]]:
+        user_id = self.request.authenticated_userid
+        if user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        mfa_methods: tp.List[tp.Any] = self.multi_factor_auth_service.get_active_methods_by_user_id(
+            user_id=user_id
+        )
+        return {"method_types": [mfa_method.method_type.value for mfa_method in mfa_methods]}
+
+    def generate_mfa_totp(self):
+        user_id = self.request.authenticated_userid
+        user = self.auth_service.get_current_user(user_id=user_id)
+        if user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+
+        payload = self.request.json_body
+        if payload["method_type"] == MultiFactorAuthMethodType.TOTP.value:
+            return self.multi_factor_auth_service.handle_totp_setup(
+                user=user, project_prefix=self.project_prefix
+            )
+        return None
+
 
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
     config.add_route("tet_auth_login", "login")
+    config.add_route("tet_auth_logout", "/logout")
     config.add_route("tet_auth_refresh_token", "/token/refresh")
-    config.add_route("tet_auth_mfa_verify", "/mfa/app/verify")
     config.add_route("tet_auth_change_password", "/users/me/password")
+    config.add_route("tet_auth_revoke_other_tokens", "/users/me/tokens/others")
+    config.add_route("tet_auth_mfa_verify", "/mfa/app/verify")
+    config.add_route("tet_auth_disable_mfa_method", "/mfa/app/disable")
+    config.add_route("tet_auth_generate_mfa_totp", "/mfa/app/setup")
+    config.add_route("tet_auth_get_mfa_methods", "/mfa/methods")
+
+    config.add_view(
+        AuthViews,
+        attr="generate_mfa_totp",
+        route_name="tet_auth_generate_mfa_totp",
+        request_method="POST",
+        renderer="json",
+        require_csrf=False,
+    )
+    config.add_view(
+        AuthViews,
+        attr="get_mfa_methods",
+        route_name="tet_auth_get_mfa_methods",
+        request_method="GET",
+        renderer="json",
+        require_csrf=False,
+    )
+    config.add_view(
+        AuthViews,
+        attr="revoke_other_tokens",
+        route_name="tet_auth_revoke_other_tokens",
+        request_method="DELETE",
+        renderer="json",
+        require_csrf=False,
+    )
+    config.add_view(
+        AuthViews,
+        attr="disable_mfa_method",
+        route_name="tet_auth_disable_mfa_method",
+        request_method="POST",
+        renderer="json",
+        require_csrf=False,
+    )
+    config.add_view(
+        AuthViews,
+        attr="logout",
+        route_name="tet_auth_logout",
+        request_method="POST",
+        renderer="json",
+        require_csrf=False,
+    )
     config.add_view(
         AuthViews,
         attr="change_password",
