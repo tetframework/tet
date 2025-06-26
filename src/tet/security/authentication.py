@@ -1116,9 +1116,9 @@ class AuthViews:
             new_password=data["newPassword"],
         )
         user = self.auth_service.get_current_user(user_id)
-        response = self.auth_service.change_password(payload=payload, user=user)
+        is_valid = self.auth_service.change_password(payload=payload, user=user)
         self.token_service.delete_other_tokens(user=user)
-        return response
+        return {"success": is_valid}
 
     def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
         try:
