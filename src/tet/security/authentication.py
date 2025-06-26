@@ -1236,6 +1236,7 @@ def includeme(config: Configurator):
         request_method="POST",
         renderer="json",
         require_csrf=False,
+        permission=NO_PERMISSION_REQUIRED,
     )
     config.add_view(
         AuthViews,
