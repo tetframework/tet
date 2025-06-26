@@ -735,7 +735,7 @@ class TetAuthService(RequestScopedBaseService):
             .one_or_none()
         )
 
-    def change_password(self, payload: PasswordChangeData, user: tp.Any) -> dict:
+    def change_password(self, payload: PasswordChangeData, user: tp.Any) -> bool:
         is_valid = self.password_change_validation(payload=payload, user=user)
         user.password = payload.new_password
         self.db_session.flush()
@@ -1110,15 +1110,18 @@ class AuthViews:
             raise HTTPUnauthorized(
                 json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE, "success": False}
             )
-        data = self.request.json_body
-        payload = PasswordChangeData(
-            current_password=data["currentPassword"],
-            new_password=data["newPassword"],
-        )
-        user = self.auth_service.get_current_user(user_id)
-        is_valid = self.auth_service.change_password(payload=payload, user=user)
-        self.token_service.delete_other_tokens(user=user)
-        return {"success": is_valid}
+        try:
+            data = self.request.json_body
+            payload = PasswordChangeData(
+                current_password=data["currentPassword"],
+                new_password=data["newPassword"],
+            )
+            user = self.auth_service.get_current_user(user_id)
+            is_valid = self.auth_service.change_password(payload=payload, user=user)
+            self.token_service.delete_other_tokens(user=user)
+            return {"success": is_valid}
+        except ValueError as e:
+            return HTTPForbidden(json_body={"message": str(e), "success": False})
 
     def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
         try:
