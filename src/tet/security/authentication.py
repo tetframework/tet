@@ -1,18 +1,18 @@
+import base64
 import dataclasses
 import enum
 import hashlib
+import io
 import logging
 import secrets
-import requests
-import io
-import base64
-import qrcode
-import qrcode.image.svg
 import typing as tp
+from datetime import datetime, timedelta, timezone
+
 import jwt
 import pyotp
-
-from datetime import datetime, timedelta, timezone
+import qrcode
+import qrcode.image.svg
+import requests
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.authorization import ACLHelper
 from pyramid.config import Configurator
@@ -29,10 +29,12 @@ from pyramid.response import Response
 from pyramid.security import NO_PERMISSION_REQUIRED, Everyone, Authenticated
 from pyramid_di import RequestScopedBaseService, autowired
 from sqlalchemy import Column, DateTime, Integer, String, Enum, Boolean
-from sqlalchemy.sql import delete
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import delete
 from zope.interface import Interface, implementer
+
+from tet.security.events import *
 
 logger = logging.getLogger(__name__)
 __all__ = [
@@ -783,29 +785,6 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             self.registry.tet_auth_long_term_token_expiration_mins
         )
 
-    def get_or_create_method(
-        self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict
-    ) -> tp.Any:
-        """
-        Get or create a multifactor authentication method for a user.
-        """
-        existing_method = (
-            self.session.query(self.tet_multi_factor_auth_method_model)
-            .filter_by(user_id=user_id, method_type=method_type)
-            .one_or_none()
-        )
-
-        if existing_method:
-            return existing_method
-
-        new_mfa_method = self.tet_multi_factor_auth_method_model(
-            method_type=method_type, user_id=user_id, data=data
-        )
-
-        self.session.add(new_mfa_method)
-        self.session.flush()
-        return new_mfa_method
-
     def create_method(self, *, method_type: MultiFactorAuthMethodType, user_id: tp.Any, data: dict):
         """
         Create a new multifactor authentication method for a user.
@@ -964,14 +943,15 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                 refresh_token=refresh_token,
                 route_prefix=route_prefix,
             )
+            self.registry.notify(MfaLoginSuccessEvent(request=self.request))
             return {"success": is_valid, "access_token": access_token}
         except KeyError as e:
+            self.registry.notify(MfaLoginFailedEvent(request=self.request))
             raise HTTPBadRequest(
                 json_body={"message": "Missing required field.", "details": str(e)}
             ) from e
-        except HTTPException:
-            raise
         except Exception as e:
+            self.registry.notify(MfaLoginFailedEvent(request=self.request))
             raise HTTPInternalServerError(
                 json_body={"message": "TOTP verification failed.", "details": str(e)}
             ) from e
@@ -1046,8 +1026,12 @@ class AuthViews:
         )
 
     def login(self) -> dict[str, tp.Any]:
+        self.registry.notify(LoginSuccessEvent(request=self.request))
+        return {"success": True}
+
         user_id = self.login_callback(self.request)
         if user_id is None:
+            self.registry.notify(LoginFailedEvent(request=self.request))
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
         payload = self.request.json_body
@@ -1071,6 +1055,8 @@ class AuthViews:
             route_prefix=self.route_prefix,
         )
         response_payload["access_token"] = access_token
+
+        self.registry.notify(LoginSuccessEvent(request=self.request))
         return response_payload
 
     def mfa_verify(self) -> dict:
@@ -1107,6 +1093,7 @@ class AuthViews:
     def change_password(self):
         user_id = self.request.authenticated_userid
         if user_id is None:
+            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
             raise HTTPUnauthorized(
                 json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE, "success": False}
             )
@@ -1119,8 +1106,10 @@ class AuthViews:
             user = self.auth_service.get_current_user(user_id)
             is_valid = self.auth_service.change_password(payload=payload, user=user)
             self.token_service.delete_other_tokens(user=user)
+            self.registry.notify(ChangePasswordSuccessEvent(request=self.request))
             return {"success": is_valid}
         except ValueError as e:
+            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
             return HTTPForbidden(json_body={"message": str(e), "success": False})
 
     def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
@@ -1132,8 +1121,9 @@ class AuthViews:
                 name=self.long_term_token_cookie_name,
                 path=f"{self.route_prefix}/",
             )
-        except Exception as e:
-            logger.exception(e)
+            self.registry.notify(LogoutSuccessEvent(request=self.request))
+        except Exception:
+            self.registry.notify(LogoutFailedEvent(request=self.request))
             return HTTPForbidden(json_body={"message": "Failed to logout", "success": False})
         return {"success": True}
 
@@ -1149,8 +1139,9 @@ class AuthViews:
             self.multi_factor_auth_service.disable_method(
                 user_id=user_id, method_type=mfa_method_type
             )
-        except Exception as e:
-            logger.exception(e)
+            self.registry.notify(DisableMfaSuccessEvent(request=self.request))
+        except Exception:
+            self.registry.notify(DisableMfaFailedEvent(request=self.request))
             return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
         return {"success": True}
 
@@ -1161,8 +1152,10 @@ class AuthViews:
         if user is None or not self.auth_service.verify_password(
             user=user, password=payload.get("password", "")
         ):
+            self.registry.notify(RevokeOtherRefreshTokensFailedEvent(request=self.request))
             raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
         self.token_service.delete_other_tokens(user=user)
+        self.registry.notify(RevokeOtherRefreshTokensSuccessEvent(request=self.request))
         return {"success": True}
 
     def get_mfa_methods(self) -> dict[str, tp.List[tp.Any]]:
@@ -1190,7 +1183,7 @@ class AuthViews:
 
 def includeme(config: Configurator):
     """Routes and stuff to register maybe under a prefix"""
-    config.add_route("tet_auth_login", "login")
+    config.add_route("tet_auth_login", "/login")
     config.add_route("tet_auth_logout", "/logout")
     config.add_route("tet_auth_refresh_token", "/token/refresh")
     config.add_route("tet_auth_change_password", "/users/me/password")
