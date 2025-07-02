@@ -993,6 +993,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                     user_id=user.id,
                     data=data.to_dict(),
                 )
+                self.request.registry.notify(CreateTotpMethodSuccessEvent(request=self.request))
             mfa_secret = data.secret
             img_str = self.generate_qr_img(user=user, mfa_secret=mfa_secret, data=data)
             return {"secret": mfa_secret, "qr_code": f"data:image/svg+xml;base64,{img_str}"}
@@ -1106,8 +1107,14 @@ class AuthViews:
             self.registry.notify(ChangePasswordSuccessEvent(request=self.request))
             return {"success": is_valid}
         except ValueError as e:
-            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
+            logger.error(f"Error while validating password change: {e}")
             return HTTPForbidden(json_body={"message": str(e), "success": False})
+        except Exception as e:
+            logger.exception(f"Error changing password: {e}")
+            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
+            return HTTPForbidden(
+                json_body={"message": "Failed to change password", "success": False}
+            )
 
     def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
         try:

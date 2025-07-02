@@ -19,6 +19,7 @@ __all__ = [
     "RevokeOtherRefreshTokensFailedEvent",
     "RevokeCurrentRefreshTokensSuccessEvent",
     "RevokeCurrentRefreshTokensFailedEvent",
+    "CreateTotpMethodSuccessEvent",
 ]
 
 
@@ -79,6 +80,11 @@ class DisableMfaSuccessEvent(TetAuthEvent):
 
 @dataclasses.dataclass()
 class DisableMfaFailedEvent(TetAuthEvent):
+    pass
+
+
+@dataclasses.dataclass()
+class CreateTotpMethodSuccessEvent(TetAuthEvent):
     pass
 
 
