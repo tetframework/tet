@@ -1026,9 +1026,6 @@ class AuthViews:
         )
 
     def login(self) -> dict[str, tp.Any]:
-        self.registry.notify(LoginSuccessEvent(request=self.request))
-        return {"success": True}
-
         user_id = self.login_callback(self.request)
         if user_id is None:
             self.registry.notify(LoginFailedEvent(request=self.request))
