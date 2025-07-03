@@ -45,19 +45,19 @@ def pyramid_request_with_event(request):
 
 def test_login_success_event(pyramid_request_with_event, caplog):
     req = pyramid_request_with_event(login_success_event_handler, AuthnLoginSuccess)
-    message = "Login successful"
+    message = "User 1 Login successful"
     req.message = message
     with caplog.at_level("INFO", logger=__name__):
-        req.registry.notify(AuthnLoginSuccess(request=req))
+        req.registry.notify(AuthnLoginSuccess(request=req, user_id=1))
     assert f"{DEFAULT_MESSAGE} {message}" in caplog.text
 
 
 def test_login_failed_event(pyramid_request_with_event, caplog):
     req = pyramid_request_with_event(login_failed_event_handler, AuthnLoginFail)
-    message = "Login failed"
+    message = "User 1 Login failed"
     req.message = message
     with caplog.at_level("WARNING", logger=__name__):
-        req.registry.notify(AuthnLoginFail(request=req))
+        req.registry.notify(AuthnLoginFail(request=req, user_id=1))
     assert f"{DEFAULT_MESSAGE} {message}" in caplog.text
 
 
