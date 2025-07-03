@@ -6,6 +6,7 @@ import io
 import logging
 import secrets
 import typing as tp
+import tet.security.events as security_events
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -33,8 +34,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import delete
 from zope.interface import Interface, implementer
-
-from tet.security.events import *
 
 logger = logging.getLogger(__name__)
 __all__ = [
@@ -943,15 +942,15 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                 refresh_token=refresh_token,
                 route_prefix=route_prefix,
             )
-            self.registry.notify(MfaLoginSuccessEvent(request=self.request))
+            self.registry.notify(security_events.MfaLoginSuccessEvent(request=self.request))
             return {"success": is_valid, "access_token": access_token}
         except KeyError as e:
-            self.registry.notify(MfaLoginFailedEvent(request=self.request))
+            self.registry.notify(security_events.MfaLoginFailedEvent(request=self.request))
             raise HTTPBadRequest(
                 json_body={"message": "Missing required field.", "details": str(e)}
             ) from e
         except Exception as e:
-            self.registry.notify(MfaLoginFailedEvent(request=self.request))
+            self.registry.notify(security_events.MfaLoginFailedEvent(request=self.request))
             raise HTTPInternalServerError(
                 json_body={"message": "TOTP verification failed.", "details": str(e)}
             ) from e
@@ -993,7 +992,9 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                     user_id=user.id,
                     data=data.to_dict(),
                 )
-                self.request.registry.notify(CreateTotpMethodSuccessEvent(request=self.request))
+                self.request.registry.notify(
+                    security_events.CreateTotpMethodSuccessEvent(request=self.request)
+                )
             mfa_secret = data.secret
             img_str = self.generate_qr_img(user=user, mfa_secret=mfa_secret, data=data)
             return {"secret": mfa_secret, "qr_code": f"data:image/svg+xml;base64,{img_str}"}
@@ -1029,7 +1030,7 @@ class AuthViews:
     def login(self) -> dict[str, tp.Any]:
         user_id = self.login_callback(self.request)
         if user_id is None:
-            self.registry.notify(LoginFailedEvent(request=self.request))
+            self.registry.notify(security_events.LoginFailedEvent(request=self.request))
             raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
 
         payload = self.request.json_body
@@ -1054,7 +1055,7 @@ class AuthViews:
         )
         response_payload["access_token"] = access_token
 
-        self.registry.notify(LoginSuccessEvent(request=self.request))
+        self.registry.notify(security_events.LoginSuccessEvent(request=self.request))
         return response_payload
 
     def mfa_verify(self) -> dict:
@@ -1091,7 +1092,7 @@ class AuthViews:
     def change_password(self):
         user_id = self.request.authenticated_userid
         if user_id is None:
-            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
+            self.registry.notify(security_events.ChangePasswordFailedEvent(request=self.request))
             raise HTTPUnauthorized(
                 json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE, "success": False}
             )
@@ -1104,14 +1105,14 @@ class AuthViews:
             user = self.auth_service.get_current_user(user_id)
             is_valid = self.auth_service.change_password(payload=payload, user=user)
             self.token_service.delete_other_tokens(user=user)
-            self.registry.notify(ChangePasswordSuccessEvent(request=self.request))
+            self.registry.notify(security_events.ChangePasswordSuccessEvent(request=self.request))
             return {"success": is_valid}
         except ValueError as e:
             logger.error(f"Error while validating password change: {e}")
             return HTTPForbidden(json_body={"message": str(e), "success": False})
         except Exception as e:
             logger.exception(f"Error changing password: {e}")
-            self.registry.notify(ChangePasswordFailedEvent(request=self.request))
+            self.registry.notify(security_events.ChangePasswordFailedEvent(request=self.request))
             return HTTPForbidden(
                 json_body={"message": "Failed to change password", "success": False}
             )
@@ -1125,9 +1126,9 @@ class AuthViews:
                 name=self.long_term_token_cookie_name,
                 path=f"{self.route_prefix}/",
             )
-            self.registry.notify(LogoutSuccessEvent(request=self.request))
+            self.registry.notify(security_events.LogoutSuccessEvent(request=self.request))
         except Exception:
-            self.registry.notify(LogoutFailedEvent(request=self.request))
+            self.registry.notify(security_events.LogoutFailedEvent(request=self.request))
             return HTTPForbidden(json_body={"message": "Failed to logout", "success": False})
         return {"success": True}
 
@@ -1143,9 +1144,9 @@ class AuthViews:
             self.multi_factor_auth_service.disable_method(
                 user_id=user_id, method_type=mfa_method_type
             )
-            self.registry.notify(DisableMfaSuccessEvent(request=self.request))
+            self.registry.notify(security_events.DisableMfaSuccessEvent(request=self.request))
         except Exception:
-            self.registry.notify(DisableMfaFailedEvent(request=self.request))
+            self.registry.notify(security_events.DisableMfaFailedEvent(request=self.request))
             return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
         return {"success": True}
 
@@ -1153,13 +1154,19 @@ class AuthViews:
         user_id = self.request.authenticated_userid
         user = self.auth_service.get_current_user(user_id=user_id)
         payload = self.request.json_body
-        if user is None or not self.auth_service.verify_password(
-            user=user, password=payload.get("password", "")
-        ):
-            self.registry.notify(RevokeOtherRefreshTokensFailedEvent(request=self.request))
+        if user is None:
             raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
+
+        if not self.auth_service.verify_password(user=user, password=payload.get("password", "")):
+            self.registry.notify(
+                security_events.RevokeOtherRefreshTokensFailedEvent(request=self.request)
+            )
+            raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
+
         self.token_service.delete_other_tokens(user=user)
-        self.registry.notify(RevokeOtherRefreshTokensSuccessEvent(request=self.request))
+        self.registry.notify(
+            security_events.RevokeOtherRefreshTokensSuccessEvent(request=self.request)
+        )
         return {"success": True}
 
     def get_mfa_methods(self) -> dict[str, tp.List[tp.Any]]:
