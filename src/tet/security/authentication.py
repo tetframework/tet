@@ -155,7 +155,7 @@ class TokenAuthenticationPolicy(CallbackAuthenticationPolicy):
         """
         token_service: TetTokenService = request.find_service(TetTokenService)
 
-        auth_header = request.headers.get(request.registry.tet_auth_access_token_header, "")
+        auth_header = request.headers.get(request.registry.tet_authz_header, "")
         scheme, _, access_token = auth_header.partition(" ")
         if scheme.lower() != "bearer" or not access_token:
             return None
@@ -207,11 +207,9 @@ DEFAULT_JWT_TOKEN_EXPIRATION_MINS = 15
 DEFAULT_LONG_TERM_TOKEN_EXPIRATION_MINS = 60 * 12
 DEFAULT_USER_ID_COLUMN = "user_id"
 DEFAULT_LONG_TERM_TOKEN_NAME = "X-Long-Token"
-DEFAULT_ACCESS_TOKEN_NAME = "X-Access-Token"
-DEFAULT_ACCESS_TOKEN_COOKIE_NAME = "access-token"
+DEFAULT_AUTHORIZATION_HEADER = "Authorization"
 DEFAULT_REFRESH_TOKEN_COOKIE_NAME = "refresh-token"
 DEFAULT_PATH = "/"
-DEFAULT_REFRESH_TOKEN_ROUTE = "refresh_token"
 DEFAULT_UNAUTHORIZED_MESSAGE = """Access denied. You are not authorised to access this resource.
 Please ensure that your credientials are correct and try again.
 """
@@ -275,11 +273,10 @@ def set_token_authentication(
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
     jwt_token_expiration_mins: int = DEFAULT_JWT_TOKEN_EXPIRATION_MINS,
     long_term_token_expiration_mins: int = DEFAULT_LONG_TERM_TOKEN_EXPIRATION_MINS,
-    access_token_header: str = DEFAULT_ACCESS_TOKEN_NAME,
+    authorization_header: str = DEFAULT_AUTHORIZATION_HEADER,
     long_term_token_header: str = DEFAULT_LONG_TERM_TOKEN_NAME,
     long_term_token_cookie_name: str = DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
     jwt_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
-    refresh_token_route: str = DEFAULT_REFRESH_TOKEN_ROUTE,
     cookie_attributes: tp.Optional[CookieAttributes] = None,
     security_policy: tp.Optional[
         tp.Union[type["TokenAuthenticationPolicy"], type["JWTCookieAuthenticationPolicy"]]
@@ -361,7 +358,7 @@ def set_token_authentication(
         config.registry.tet_auth_user_model = user_model
         config.registry.tet_auth_project_prefix = project_prefix
         config.registry.tet_auth_user_id_column = user_id_column
-        config.registry.tet_auth_access_token_header = access_token_header
+        config.registry.tet_authz_header = authorization_header
         config.registry.tet_auth_long_term_token_header = long_term_token_header
         config.registry.tet_auth_long_term_token_cookie_name = long_term_token_cookie_name
         config.registry.tet_auth_jwt_claims = jwt_claims
@@ -372,7 +369,6 @@ def set_token_authentication(
         config.registry.tet_auth_jwt_algorithm = jwt_algorithm
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
         config.registry.tet_auth_long_term_token_expiration_mins = long_term_token_expiration_mins
-        config.registry.tet_auth_refresh_token_route = refresh_token_route
         config.registry.tet_auth_security_policy = security_policy
 
     config.action(discriminator="set_token_authentication", callable=register)
@@ -1021,7 +1017,6 @@ class AuthViews:
         self.long_term_token_expiration_mins = (
             self.registry.tet_auth_long_term_token_expiration_mins
         )
-        self.refresh_token_route = self.registry.tet_auth_refresh_token_route
         self.route_prefix = self.request.current_route_path().rpartition("/")[0]
         self.login_callback = self.registry.tet_auth_login_callback
         self.cookie_attributes: tp.Optional[CookieAttributes] = (
