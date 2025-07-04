@@ -945,7 +945,10 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             route_prefix=route_prefix,
         )
         self.registry.notify(
-            security_events.AuthnLoginSuccess(request=self.request, user_id=user_id)
+            security_events.AuthnLoginSuccess(
+                request=self.request,
+                user_identity=self.request.json_body.get("user_identity", user_id),
+            )
         )
         return {"success": is_valid, "access_token": access_token}
 
@@ -1027,12 +1030,13 @@ class AuthViews:
 
     def login(self) -> dict[str, tp.Any]:
         user_id = self.login_callback(self.request)
+        payload = self.request.json_body
+        user_identity = payload.get("user_identity", user_id)
+        totp_token = payload.get("token")
+        response_payload: dict[str, tp.Any] = {"success": True}
         try:
             if user_id is None:
                 raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-            payload = self.request.json_body
-            totp_token = payload.get("token")
-            response_payload: dict[str, tp.Any] = {"success": True}
             refresh_token = self.token_service.create_long_term_token(user_id, self.project_prefix)
             access_token = self.token_service.create_short_term_jwt(user_id)
 
@@ -1053,26 +1057,28 @@ class AuthViews:
             response_payload["access_token"] = access_token
 
             self.registry.notify(
-                security_events.AuthnLoginSuccess(request=self.request, user_id=user_id)
+                security_events.AuthnLoginSuccess(  # type: ignore
+                    request=self.request, user_identity=user_identity
+                )
             )
             return response_payload
 
         except KeyError as e:
             self.registry.notify(
-                security_events.AuthnLoginFail(request=self.request, user_id=user_id)
+                security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
             raise HTTPBadRequest(
                 json_body={"message": "Missing required field.", "details": str(e)}
             ) from e
         except HTTPException as e:
             self.registry.notify(
-                security_events.AuthnLoginFail(request=self.request, user_id=user_id)
+                security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
             raise e
         except Exception as e:
             logger.exception(f"Error during login: {e}")
             self.registry.notify(
-                security_events.AuthnLoginFail(request=self.request, user_id=user_id)
+                security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
             raise HTTPInternalServerError(
                 json_body={"message": "Login failed", "details": str(e)}
