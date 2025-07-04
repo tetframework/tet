@@ -154,13 +154,13 @@ class TokenAuthenticationPolicy(CallbackAuthenticationPolicy):
            - ``None`` if no user is authenticated.
         """
         token_service: TetTokenService = request.find_service(TetTokenService)
-        jwt_token = request.headers.get(request.registry.tet_auth_access_token_header)
 
-        if not jwt_token:
+        auth_header = request.headers.get(request.registry.tet_auth_access_token_header, "")
+        scheme, _, access_token = auth_header.partition(" ")
+        if scheme.lower() != "bearer" or not access_token:
             return None
 
-        payload = token_service.verify_jwt(jwt_token)
-
+        payload = token_service.verify_jwt(access_token)
         return payload.get("user_id") if payload else None
 
     def permits(self, request, context, permission):
