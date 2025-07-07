@@ -9,7 +9,7 @@ from tests.models.accounts import User
 from tet.security.authentication import TetTokenService
 
 LOGIN_ENDPOINT = "/api/v1/auth/login"
-ACCESS_TOKEN_HEADER_NAME = "x-access-token"
+ACCESS_TOKEN_HEADER_NAME = "Authorization"
 LONG_TERM_TOKEN_COOKIE_NAME = "refresh-token"
 ACCESS_TOKEN_COOKIE_NAME = "access-token"
 HOME_ROUTE = "/"
@@ -118,7 +118,7 @@ def test_access_token_should_work_to_access_protected_route(
     authentication_tokens, pyramid_test_app
 ):
     refresh_token, access_token = authentication_tokens
-    headers = {"x-access-token": access_token}
+    headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
     response = pyramid_test_app.get(HOME_ROUTE, headers=headers, status=200)
 
     assert response.status_code == 200
@@ -176,7 +176,7 @@ def test_it_should_fail_to_access_the_protected_route_with_invalid_access_token(
     pyramid_test_app,
 ):
     headers = {
-        "x-access-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3MzgwNjk5ODd9"
+        ACCESS_TOKEN_HEADER_NAME: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3MzgwNjk5ODd9"
         ".oeTClyh2CDWH1eHJPuxlm8TwR4zzBK4QZkop17fROa"
     }
     pytest.raises(
@@ -253,7 +253,7 @@ def test_access_token_should_work_to_access_protected_route_with_new_policy(
     assert refresh_token == capture_token["refresh_token"]
     assert capture_token["access_token"] == access_token
 
-    headers = {ACCESS_TOKEN_HEADER_NAME: access_token}
+    headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
     response = app.get(HOME_ROUTE, headers=headers, status=200)
 
     assert response.status_code == 200
