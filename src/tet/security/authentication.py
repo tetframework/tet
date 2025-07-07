@@ -1065,11 +1065,11 @@ class AuthViews:
             raise HTTPBadRequest(
                 json_body={"message": "Missing required field.", "details": str(e)}
             ) from e
-        except HTTPException as e:
+        except HTTPException:
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
-            raise e
+            raise
         except Exception as e:
             logger.exception(f"Error during login: {e}")
             self.registry.notify(
