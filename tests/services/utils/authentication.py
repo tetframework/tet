@@ -1,3 +1,3 @@
 def get_cookie(cookiejar, name):
-    founded_cookie = [cookie for cookie in cookiejar if cookie.name == name]
-    return founded_cookie[0].value if founded_cookie else None
+    matching_cookies = [cookie for cookie in cookiejar if cookie.name == name]
+    return matching_cookies[0].value if matching_cookies else None
