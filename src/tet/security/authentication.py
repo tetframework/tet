@@ -238,6 +238,40 @@ MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 128
 MIN_SCORE = 2
 KEY_PREFIX_PROFILE_CHANGE_PASSWORD_FORM = "settings.profile.changePasswordForm"
+MFA_REQUIRED_KEY = "mfa_required"
+
+
+@dataclasses.dataclass
+class AuthLoginFailure:
+    """
+    Dataclass for storing login failure information.
+
+    Attributes:
+        message: The error message describing the failure.
+        status_code: The HTTP status code associated with the failure.
+    """
+
+    message: str
+    status_code: int
+
+
+@dataclasses.dataclass
+class AuthLoginResult:
+    """
+    Dataclass for storing login data.
+
+    Attributes:
+        user: user object
+        user_identity: The identity of the user attempting to log in (e.g., email, user_name or id).
+        login_failure: Optional LoginFailure object containing details of the login failure, if any.
+    """
+
+    user_id: tp.Any
+    totp_token: tp.Optional[str] = None
+    user: tp.Optional[tp.Any] = None
+    user_identity: tp.Optional[str] = None
+    login_failure: tp.Optional[AuthLoginFailure] = None
+    mfa_required_key: str = MFA_REQUIRED_KEY
 
 
 class ILoginCallback(tp.Protocol):
@@ -247,7 +281,7 @@ class ILoginCallback(tp.Protocol):
     **Returns:** ``user_id``
     """
 
-    def __call__(self, request: Request) -> tp.Optional[tp.Any]:
+    def __call__(self, request: Request, LoginD) -> tp.Optional[tp.Any]:
         pass
 
 
@@ -892,15 +926,13 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             totp_mfa_method.data = data.to_dict()
             return {"success": is_valid}
         except KeyError as e:
-            raise HTTPBadRequest(
-                json_body={"message": "Missing required field.", "details": str(e)}
-            ) from e
+            logger.exception(f"details {str(e)}")
+            raise HTTPBadRequest(json_body={"message": "Missing required field."}) from e
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPInternalServerError(
-                json_body={"message": "TOTP verification failed.", "details": str(e)}
-            ) from e
+            logger.exception(f"details {str(e)}")
+            raise HTTPInternalServerError(json_body={"message": "TOTP verification failed."}) from e
 
     def handle_totp_challenge(
         self,
@@ -1024,11 +1056,12 @@ class AuthViews:
         )
 
     def login(self) -> dict[str, tp.Any]:
-        user_id = self.login_callback(self.request)
-        payload = self.request.json_body
-        user_identity = payload.get("user_identity", user_id)
-        totp_token = payload.get("token")
+        auth_result: AuthLoginResult = self.login_callback(self.request)
+        user_id = auth_result.user_id
+        user_identity = auth_result.user_identity
+        totp_token = auth_result.totp_token
         response_payload: dict[str, tp.Any] = {"success": True}
+
         try:
             if user_id is None:
                 raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
@@ -1037,7 +1070,7 @@ class AuthViews:
 
             if self.multi_factor_auth_service.is_totp_mfa_enabled(user_id):
                 if not totp_token:
-                    response_payload["mfa_required"] = True
+                    response_payload[auth_result.mfa_required_key] = True
                     return response_payload
 
                 return self.multi_factor_auth_service.handle_totp_challenge(
@@ -1062,22 +1095,19 @@ class AuthViews:
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
-            raise HTTPBadRequest(
-                json_body={"message": "Missing required field.", "details": str(e)}
-            ) from e
+            logger.exception(f"Missing required field during login: {str(e)}")
+            raise HTTPBadRequest(json_body={"message": "Missing required field."}) from e
         except HTTPException:
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
             raise
         except Exception as e:
-            logger.exception(f"Error during login: {e}")
+            logger.exception(f"Error during login: {str(e)}")
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
-            raise HTTPInternalServerError(
-                json_body={"message": "Login failed", "details": str(e)}
-            ) from e
+            raise HTTPInternalServerError(json_body={"message": "Login failed"}) from e
 
     def mfa_verify(self) -> dict:
         """
@@ -1138,7 +1168,9 @@ class AuthViews:
                 )
             )
             logger.error(f"Error while validating password change: {e}")
-            return HTTPForbidden(json_body={"message": str(e), "success": False})
+            return HTTPForbidden(
+                json_body={"message": "Invalid password change request", "success": False}
+            )
         except HTTPException as e:
             self.registry.notify(
                 security_events.AuthnPasswordChangeFail(  # type: ignore

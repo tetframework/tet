@@ -24,9 +24,9 @@ def login_success_event_handler(event: AuthnLoginSuccess):
 @subscriber(AuthnLoginFail)
 def login_failed_event_handler(event: AuthnLoginFail):
     """
-    Handle the LoginSuccessEvent.
+    Handle the LoginFailEvent.
     This is a placeholder for any additional logic you want to execute
-    when a user successfully logs in.
+    when a user failed to log in.
     """
     logger.warning(f"{DEFAULT_MESSAGE} {event.request.message}")
 
