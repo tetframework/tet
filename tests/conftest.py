@@ -176,3 +176,34 @@ def pyramid_app(security_policy, pyramid_config):
     pyramid_config.scan("tests.services.security.subscribers.auth_subscribers")
     app = pyramid_config.make_wsgi_app()
     yield app
+
+
+@pytest.fixture()
+def pyramid_event_request(pyramid_event_app, db_engine):
+    with pyramid_event_app.request_context({}) as request:
+        setUp(registry=request.registry, request=request)
+        yield request
+    tearDown()
+
+
+@pytest.fixture()
+def pyramid_event_app(pyramid_config):
+    pyramid_config.set_token_authentication(
+        long_term_token_model=Token,
+        project_prefix=pyramid_config.registry.settings["project_prefix"],
+        login_callback=login_callback,
+        jwk_resolver=jwk_resolver,
+        security_policy=TokenAuthenticationPolicy,
+        user_model=User,
+        multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
+    )
+    pyramid_config.add_route("home", "/")
+    pyramid_config.add_view(
+        home_view,
+        route_name="home",
+        renderer="json",
+        permission="view",
+    )
+    pyramid_config.scan("tests.services.security.subscribers.auth_subscribers")
+    app = pyramid_config.make_wsgi_app()
+    yield app

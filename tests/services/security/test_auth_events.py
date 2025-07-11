@@ -1,14 +1,16 @@
 import json
 import logging as l
+from unittest.mock import patch, MagicMock
 
 import pytest
 import structlog
 from pyramid import testing
 from pyramid.events import subscriber
+from pyramid.httpexceptions import HTTPUnauthorized
 from webtest import TestApp
 
 from tests.services.constants import LOGIN_ENDPOINT
-from tet.security.authentication import TetTokenService
+from tet.security.authentication import TetTokenService, AuthViews, AuthLoginResult
 from tet.security.events import AuthnLoginSuccess, AuthnLoginFail
 
 logger = l.getLogger(__name__)
@@ -189,3 +191,46 @@ def test_login_view_emits_fail_event(
     assert matched, (
         f"No WARNING log with description '{expected_description}' found in 'audit' logger"
     )
+
+
+def test_login_notify_success(pyramid_event_request):
+    request = pyramid_event_request
+    request.registry.tet_auth_login_callback = lambda req: AuthLoginResult(
+        user_id=1, user_identity=DEFAULT_USER_IDENTITY, success=True
+    )
+
+    view = AuthViews(request, route_prefix="/auth")
+    view.token_service.create_long_term_token = MagicMock(return_value="refresh")
+    view.token_service.create_short_term_jwt = MagicMock(return_value="access")
+    view.multi_factor_auth_service.is_totp_mfa_enabled = MagicMock(return_value=False)
+    view.auth_service.set_cookies = MagicMock()
+
+    with patch.object(request.registry, "notify") as mock_notify:
+        view.login()
+        expected_event = AuthnLoginSuccess(
+            user_identity=DEFAULT_USER_IDENTITY,
+            request=request,
+        )
+        mock_notify.assert_called_once_with(expected_event)
+
+
+def test_login_notify_fail(pyramid_event_request):
+    request = pyramid_event_request
+    request.registry.tet_auth_login_callback = lambda req: AuthLoginResult(
+        user_id=None, user_identity=DEFAULT_USER_IDENTITY
+    )
+
+    view = AuthViews(request, route_prefix="/auth")
+    view.token_service.create_long_term_token = MagicMock(return_value="refresh")
+    view.token_service.create_short_term_jwt = MagicMock(return_value="access")
+    view.multi_factor_auth_service.is_totp_mfa_enabled = MagicMock(return_value=False)
+    view.auth_service.set_cookies = MagicMock()
+
+    with patch.object(request.registry, "notify") as mock_notify:
+        with pytest.raises(HTTPUnauthorized):
+            view.login()
+        expected_event = AuthnLoginFail(
+            user_identity=DEFAULT_USER_IDENTITY,
+            request=request,
+        )
+        mock_notify.assert_called_once_with(expected_event)
