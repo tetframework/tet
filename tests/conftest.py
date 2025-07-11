@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from tests.models.accounts import Base, Token, User, MultiFactorAuthenticationMethod
 from tet.config import Configurator as tetConfigurator
-from tet.security.authentication import TokenAuthenticationPolicy, JWTCookieAuthenticationPolicy
+from tet.security.authentication import (
+    TokenAuthenticationPolicy,
+    JWTCookieAuthenticationPolicy,
+    AuthLoginResult,
+)
 from tet.view import view_config
 
 DB_NAME = "test_tet"
@@ -56,25 +60,32 @@ def db_session(db_engine, pyramid_request, transaction_manager):
         yield session
 
 
-def login_callback(request: Request) -> tp.Any:
+def login_callback(request: Request) -> AuthLoginResult:
     """This is just an example of a login callback. It should be defined by the pyramid app."""
     if not request.content_length:
-        return None
+        return AuthLoginResult(user_id=None)
 
     db_session = request.find_service(Session)
-    try:
-        payload = request.json_body
-    except Exception:
-        return None
 
+    payload = request.json_body
     user_identity = payload.get("user_identity")
+    totp_token = payload.get("totp_token")
+
     if not user_identity:
-        return None
+        return AuthLoginResult(user_id=None)
 
     user: User = db_session.query(User).filter(User.email == user_identity).one_or_none()
-    if not user:
-        return None
-    return user.id
+    if not user or not user.validate_password(payload.get("password", "")):
+        return AuthLoginResult(
+            user_id=None,
+            user_identity=user_identity,
+        )
+
+    return AuthLoginResult(
+        user_id=user.id,
+        user_identity=user_identity,
+        totp_token=totp_token,
+    )
 
 
 def jwk_resolver(request: Request) -> str:
@@ -162,5 +173,6 @@ def pyramid_app(security_policy, pyramid_config):
         renderer="json",
         permission="view",
     )
+    pyramid_config.scan("tests.services.security.subscribers.auth_subscribers")
     app = pyramid_config.make_wsgi_app()
     yield app

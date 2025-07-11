@@ -50,6 +50,7 @@ __all__ = [
     "TetTokenService",
     "TOTPData",
     "CookieAttributes",
+    "AuthLoginResult",
 ]
 
 
@@ -242,36 +243,27 @@ MFA_REQUIRED_KEY = "mfa_required"
 
 
 @dataclasses.dataclass
-class AuthLoginFailure:
-    """
-    Dataclass for storing login failure information.
-
-    Attributes:
-        message: The error message describing the failure.
-        status_code: The HTTP status code associated with the failure.
-    """
-
-    message: str
-    status_code: int
-
-
-@dataclasses.dataclass
 class AuthLoginResult:
     """
     Dataclass for storing login data.
 
     Attributes:
-        user: user object
-        user_identity: The identity of the user attempting to log in (e.g., email, user_name or id).
-        login_failure: Optional LoginFailure object containing details of the login failure, if any.
+        user_id: Unique identifier of the user.
+        totp_token: Optional TOTP (Time-based One-Time Password) token for MFA.
+        user_identity: Optional user identity (e.g., email, username, or id).
+        mfa_required_key: Key indicating if MFA is required.
+        success: Boolean indicating whether the login was successful.
     """
 
     user_id: tp.Any
     totp_token: tp.Optional[str] = None
-    user: tp.Optional[tp.Any] = None
     user_identity: tp.Optional[str] = None
-    login_failure: tp.Optional[AuthLoginFailure] = None
     mfa_required_key: str = MFA_REQUIRED_KEY
+    success: bool = False
+
+    def __bool__(self) -> bool:
+        """Returns True if login was successful, otherwise False."""
+        return self.success
 
 
 class ILoginCallback(tp.Protocol):
@@ -281,7 +273,7 @@ class ILoginCallback(tp.Protocol):
     **Returns:** ``user_id``
     """
 
-    def __call__(self, request: Request, LoginD) -> tp.Optional[tp.Any]:
+    def __call__(self, request: Request) -> AuthLoginResult:
         pass
 
 

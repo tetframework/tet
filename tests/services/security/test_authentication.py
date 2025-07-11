@@ -6,13 +6,9 @@ from sqlalchemy.orm import Session
 from webtest import TestApp
 
 from tests.models.accounts import User
+from tests.services.constants import LOGIN_ENDPOINT, ACCESS_TOKEN_HEADER_NAME, HOME_ROUTE
+from tests.services.utils.authentication import get_cookie
 from tet.security.authentication import TetTokenService
-
-LOGIN_ENDPOINT = "/api/v1/auth/login"
-ACCESS_TOKEN_HEADER_NAME = "Authorization"
-LONG_TERM_TOKEN_COOKIE_NAME = "refresh-token"
-ACCESS_TOKEN_COOKIE_NAME = "access-token"
-HOME_ROUTE = "/"
 
 
 @pytest.fixture()
@@ -39,7 +35,7 @@ def authentication_tokens(pyramid_test_app, capture_token, pyramid_request):
 def create_user(db_session: Session):
     user = User(email="exampple2@invalid.invalid", name="example2", is_admin=True)
     user.password = "1234@abcd"
-    default_user = db_session.query(User).filter(User.email == user.email).first()
+    default_user = db_session.query(User).filter(User.email == user.email).one_or_none()
     if default_user:
         return default_user
 
@@ -191,11 +187,6 @@ def test_it_should_fail_to_access_the_protected_route_with_invalid_access_token(
 @pytest.fixture()
 def pyramid_test_app_with_jwt_cookie_policy(request, pyramid_app):
     return TestApp(pyramid_app)
-
-
-def get_cookie(cookiejar, name):
-    founded_cookie = [cookie for cookie in cookiejar if cookie.name == name]
-    return founded_cookie[0].value if founded_cookie else None
 
 
 def test_login_view_should_return_refresh_token(
