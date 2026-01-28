@@ -25,6 +25,12 @@ Unearthly intelligent batteries-included application framework built on Pyramid.
 
    readme
 
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
+
+   api/modules
+
 Indices and tables
 ==================
 
