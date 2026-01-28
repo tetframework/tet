@@ -3,7 +3,7 @@
 
 2025-01-28  Antti Haapala  <antti.haapala@anttipatterns.com>
 
-    * Add Python 3.12, 3.13, 3.14 support. Drop Python 3.6-3.8 support.
+    * Add Python 3.12, 3.13, 3.14 support. Drop Python 3.6, 3.7 support.
     * Add Sphinx documentation and ReadTheDocs integration.
 
 2021-03-19  Antti Haapala  <antti.haapala@anttipatterns.com>
