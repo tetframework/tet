@@ -28,8 +28,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "tet"
-copyright = "2016, Antti Haapala"
-author = "Antti Haapala"
+copyright = "2013-2026, Tet Contributors"
+author = "Tet Contributors"
 
 # Read version from setup.py
 setup_py_path = os.path.join(os.path.dirname(__file__), "..", "setup.py")
@@ -48,6 +48,23 @@ language = "en"
 exclude_patterns = ["_build"]
 
 pygments_style = "sphinx"
+
+
+# -- Options for autodoc --------------------------------------------------
+
+# Exclude deprecated classes from documentation
+autodoc_default_options = {
+    'exclude-members': 'TetAppFactory',
+}
+
+def autodoc_skip_member(app, what, name, obj, skip, options):
+    """Skip deprecated TetAppFactory class."""
+    if name == 'TetAppFactory':
+        return True
+    return skip
+
+def setup(app):
+    app.connect('autodoc-skip-member', autodoc_skip_member)
 
 
 # -- Options for HTML output ----------------------------------------------
