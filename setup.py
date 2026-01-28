@@ -26,7 +26,7 @@ setup(
         "Development Status :: 4 - Beta",
         "Framework :: Pyramid",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: Python Software Foundation License",
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
