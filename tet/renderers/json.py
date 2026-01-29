@@ -1,5 +1,46 @@
+"""
+JSON rendering with custom type adapters for Tet applications.
+
+This module provides a JSON renderer with sensible defaults and the ability
+to register custom type adapters. It is included automatically when using
+the ``renderers.json`` feature.
+
+Features
+--------
+
+- Automatic serialization of :class:`datetime.datetime` and :class:`datetime.date`
+  to ISO 8601 format
+- SQLAlchemy keyed tuple support (when SQLAlchemy is installed)
+- Extensible via custom type adapters
+
+Example
+-------
+
+Adding a custom adapter for a model class::
+
+    from tet.config import application_factory
+
+    @application_factory(included_features=["renderers.json"])
+    def main(config):
+        config.add_json_adapter(
+            for_=MyModel,
+            adapter=lambda obj, request: {"id": obj.id, "name": obj.name},
+        )
+        config.scan()
+
+Using a custom JSON renderer factory::
+
+    from pyramid.renderers import JSON
+    from tet.renderers.json import construct_default_renderer
+
+    # Create a renderer with custom settings
+    renderer = construct_default_renderer(
+        renderer_factory=JSON,
+        serializer=custom_serializer,
+    )
+"""
 import datetime
-from typing import Callable, Any, Dict
+from typing import Any, Callable, Dict
 
 from pyramid.config import Configurator
 from pyramid.renderers import JSON

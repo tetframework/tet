@@ -1,15 +1,52 @@
+"""
+Custom authorization policy with request access for Tet applications.
+
+This module provides an authorization policy interface that includes
+the request object, allowing authorization decisions based on request
+data. It is included automatically when using the ``security.authorization``
+feature.
+
+The standard Pyramid authorization policy only receives context, principals,
+and permission. This module wraps policies implementing
+:class:`INewAuthorizationPolicy` to also provide the request.
+
+Example
+-------
+
+Implementing a custom authorization policy::
+
+    from zope.interface import implementer
+    from tet.security.authorization import INewAuthorizationPolicy
+
+    @implementer(INewAuthorizationPolicy)
+    class MyAuthorizationPolicy:
+        def permits(self, request, context, principals, permission):
+            # Access request data for authorization decisions
+            if request.matched_route.name == "admin":
+                return "admin" in principals
+            return permission in principals
+
+        def principals_allowed_by_permission(self, request, context, permission):
+            raise NotImplementedError()
+
+Using the policy::
+
+    from tet.config import application_factory
+
+    @application_factory(included_features=["security.authorization"])
+    def main(config):
+        config.set_authorization_policy(MyAuthorizationPolicy())
+        config.scan()
+"""
 from typing import Any
 
 from pyramid.config import Configurator
+from pyramid.config.security import SecurityConfiguratorMixin
 from pyramid.interfaces import IAuthorizationPolicy
 from pyramid.threadlocal import get_current_request
-from zope.interface import Interface
-from zope.interface import implementer
-from pyramid.config.security import SecurityConfiguratorMixin
+from zope.interface import Interface, implementer
 
-__all__ = [
-    'INewAuthorizationPolicy'
-]
+__all__ = ["INewAuthorizationPolicy"]
 
 
 class INewAuthorizationPolicy(Interface):

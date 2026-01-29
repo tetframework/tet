@@ -1,3 +1,9 @@
+"""
+Path and module resolution utilities.
+
+This module provides utilities for determining the calling package,
+used internally by Tet's configuration system.
+"""
 import sys
 from itertools import count
 

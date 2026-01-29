@@ -1,3 +1,32 @@
+"""
+Decorator utilities for Tet applications.
+
+This module provides useful decorators:
+
+- :func:`deprecated` - Mark functions as deprecated
+- :class:`reify_attr` - Cached property with configurable attribute name
+
+Example
+-------
+
+Marking a function as deprecated::
+
+    from tet.decorators import deprecated
+
+    @deprecated
+    def old_function():
+        pass
+
+Using reify_attr for cached properties::
+
+    from tet.decorators import reify_attr
+
+    class MyClass:
+        @reify_attr
+        def expensive_computation(self):
+            # This will only be called once per instance
+            return compute_something()
+"""
 import warnings
 from functools import update_wrapper
 

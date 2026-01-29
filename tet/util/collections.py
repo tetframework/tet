@@ -1,3 +1,24 @@
+"""
+Collection utilities for Tet applications.
+
+This module provides utility functions for working with collections.
+
+Example
+-------
+
+Flattening nested iterables::
+
+    from tet.util.collections import flatten
+
+    nested = [1, [2, 3, [4, 5]], 6]
+    flat = list(flatten(nested))
+    # flat == [1, 2, 3, 4, 5, 6]
+
+    # Strings are not exploded
+    with_strings = ["hello", ["world", ["!"]]]
+    flat = list(flatten(with_strings))
+    # flat == ["hello", "world", "!"]
+"""
 from collections.abc import Iterable
 
 

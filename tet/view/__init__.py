@@ -1,3 +1,40 @@
+"""
+View utilities and base classes for Tet applications.
+
+This module provides view-related utilities including:
+
+- :class:`view_config` - Extended Pyramid view configuration decorator
+- :class:`expose` - Decorator for exposing controller methods as views
+- :class:`BaseController` - Base class for traversal-based controllers
+- :class:`ServiceViews` - Base class for service-based view classes
+
+Example
+-------
+
+Using the expose decorator with controllers::
+
+    from tet.view import BaseController, expose
+
+    class UserController(BaseController):
+        @expose(renderer="json")
+        def index(self):
+            return {"users": []}
+
+        @expose(renderer="json")
+        def profile(self):
+            return {"user": "john"}
+
+Using ServiceViews for dependency injection::
+
+    from tet.view import ServiceViews
+    from pyramid.view import view_config
+
+    class UserViews(ServiceViews):
+        @view_config(route_name="users", renderer="json")
+        def list_users(self):
+            # self.request and self.context are available
+            return {"users": []}
+"""
 from inspect import isclass
 
 from pyramid.request import Request

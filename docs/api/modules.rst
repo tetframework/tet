@@ -17,6 +17,7 @@ API Reference
    tet.security
    tet.security.authorization
    tet.security.csrf
+   tet.services
    tet.session
    tet.sqlalchemy
    tet.sqlalchemy.factory

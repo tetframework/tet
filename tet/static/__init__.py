@@ -1,7 +1,46 @@
-import time
-from pyramid.httpexceptions import HTTPMovedPermanently, HTTPServiceUnavailable, HTTPNotFound
-from pipes import quote
+"""
+Static file serving with cache-busting support.
+
+This module provides utilities for serving static files with automatic
+cache-busting via versioned URLs. When the application starts, a unique
+cache-breaker token is generated based on the current timestamp.
+
+Features
+--------
+
+- Automatic cache-busting URLs for static assets
+- Graceful handling of old cache-breaker values (301 redirect)
+- Graceful handling of future cache-breaker values (503 retry)
+
+Example
+-------
+
+Setting up static files with cache-busting::
+
+    from tet.config import application_factory
+
+    @application_factory()
+    def main(config):
+        config.include("tet.static")
+        config.add_static_view_with_breaker(
+            name="static/{breaker}",
+            path="myapp:static",
+        )
+        config.scan()
+
+In templates, use the versioned URL::
+
+    <link href="${request.static_url('myapp:static/style.css')}" rel="stylesheet">
+"""
 import os
+import time
+from pipes import quote
+
+from pyramid.httpexceptions import (
+    HTTPMovedPermanently,
+    HTTPNotFound,
+    HTTPServiceUnavailable,
+)
 
 # todo: use other versioning where possible
 cachebreaker = None

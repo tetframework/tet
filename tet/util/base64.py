@@ -1,8 +1,39 @@
+"""
+Base64 and Crockford Base32 encoding utilities.
+
+This module provides encoding utilities including standard Base64 and
+Crockford's Base32, which is human-friendly (avoids ambiguous characters
+like 0/O and 1/I/L).
+
+Example
+-------
+
+Using standard Base64::
+
+    from tet.util.base64 import Base64
+
+    encoded = Base64.encode(b"hello")
+    decoded = Base64.decode(encoded)
+
+    # Generate random Base64 characters
+    random_str = Base64.generate_characters(16)
+
+Using Crockford Base32::
+
+    from tet.util.base64 import CrockfordBase32
+
+    encoded = CrockfordBase32.encode(b"hello")
+    decoded = CrockfordBase32.decode(encoded)
+
+    # Crockford Base32 is case-insensitive and handles ambiguous chars
+    CrockfordBase32.decode("O1L")  # Treated as "011"
+"""
 import base64
-import string
 import random
+import string
 
 maketrans = bytes.maketrans
+
 
 class BaseCodec(object):
     @classmethod

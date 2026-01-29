@@ -1,7 +1,33 @@
+"""
+Password hashing utilities using passlib.
+
+This module provides functions for securely hashing and verifying
+passwords using SHA-256 crypt.
+
+Example
+-------
+
+Hashing and verifying passwords::
+
+    from tet.util.crypt import crypt, verify
+
+    # Hash a password
+    hashed = crypt("my_secret_password")
+
+    # Verify a password
+    if verify("my_secret_password", hashed):
+        print("Password is correct!")
+
+Note
+----
+
+For SQLAlchemy models, consider using :class:`tet.sqlalchemy.password.UserPasswordMixin`
+which integrates this functionality directly into your model.
+"""
 import passlib.hash
-import random
 
 password_hash = passlib.hash.sha256_crypt
+
 
 def crypt(password):
     if isinstance(password, str):
