@@ -30,6 +30,12 @@ password_hash = passlib.hash.sha256_crypt
 
 
 def crypt(password):
+    """
+    Hash a password using SHA-256 crypt.
+
+    :param password: Plaintext password (str or bytes)
+    :return: Hashed password string
+    """
     if isinstance(password, str):
         password_8bit = password.encode()
     else:
@@ -41,7 +47,15 @@ def crypt(password):
 
     return rv
 
+
 def verify(password, hash):
+    """
+    Verify a password against a hash.
+
+    :param password: Plaintext password to verify (str or bytes)
+    :param hash: Hash to verify against
+    :return: True if password matches, False otherwise
+    """
     if isinstance(password, str):
         password_8bit = password.encode()
     else:

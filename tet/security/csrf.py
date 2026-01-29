@@ -31,4 +31,9 @@ from pyramid.config import Configurator
 
 
 def includeme(config: Configurator) -> None:
+    """
+    Pyramid includeme that enables CSRF protection by default.
+
+    All state-changing requests will require a valid CSRF token.
+    """
     config.set_default_csrf_options(require_csrf=True)

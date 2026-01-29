@@ -38,7 +38,14 @@ from ..util.crypt import crypt, verify
 
 
 class UserPasswordMixin(object):
-    _password = sa.Column('password', sa.Unicode, nullable=True)
+    """
+    Mixin that adds password hashing to SQLAlchemy user models.
+
+    Provides a ``password`` property that automatically hashes on set,
+    and a :meth:`validate_password` method for verification.
+    """
+
+    _password = sa.Column("password", sa.Unicode, nullable=True)
 
     def _set_password(self, password):
         self._password = crypt(password)
@@ -48,6 +55,12 @@ class UserPasswordMixin(object):
         return self._password
 
     def validate_password(self, password):
+        """
+        Validate a plaintext password against the stored hash.
+
+        :param password: Plaintext password to validate
+        :return: True if password matches, False otherwise
+        """
         if self._password is None:
             return False
 
@@ -55,5 +68,7 @@ class UserPasswordMixin(object):
 
     @declarative.declared_attr
     def password(cls):
-        return orm.synonym('_password', descriptor=property(cls._get_password,
-                                                            cls._set_password))
+        """Password property that hashes on set and returns hash on get."""
+        return orm.synonym(
+            "_password", descriptor=property(cls._get_password, cls._set_password)
+        )

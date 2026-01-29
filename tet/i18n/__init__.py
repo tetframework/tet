@@ -40,22 +40,34 @@ from pyramid.threadlocal import get_current_request
 
 
 def add_renderer_globals(event):
-    request = event.get('request')
+    """
+    Subscriber that adds i18n functions to renderer globals.
+
+    Adds ``_``, ``gettext``, ``ngettext``, and ``localizer`` to the template context.
+    """
+    request = event.get("request")
 
     if request is None:
         request = get_current_request()
 
-    event['_'] = request.translate
-    event['gettext'] = request.translate
-    event['ngettext'] = request.pluralize
-    event['localizer'] = request.localizer
+    event["_"] = request.translate
+    event["gettext"] = request.translate
+    event["ngettext"] = request.pluralize
+    event["localizer"] = request.localizer
 
 
 def configure_i18n(config: Configurator, default_domain: str):
-    config.add_subscriber(add_renderer_globals,
-                          'pyramid.events.BeforeRender')
-    config.add_subscriber(add_renderer_globals,
-                          'tet.viewlet.IBeforeViewletRender')
+    """
+    Configure i18n support for a Pyramid application.
+
+    Adds ``request.translate`` and ``request.pluralize`` methods, and
+    registers subscribers to add i18n functions to template contexts.
+
+    :param config: Pyramid Configurator
+    :param default_domain: Default translation domain
+    """
+    config.add_subscriber(add_renderer_globals, "pyramid.events.BeforeRender")
+    config.add_subscriber(add_renderer_globals, "tet.viewlet.IBeforeViewletRender")
 
     config.registry.tsf = tsf = TranslationStringFactory(default_domain)
 
@@ -87,6 +99,12 @@ def configure_i18n(config: Configurator, default_domain: str):
 
 
 def includeme(config: Configurator):
-    default_domain = config.get_settings().get('default_i18n_domain',
-                                               config.package.__name__)
+    """
+    Pyramid includeme function for i18n support.
+
+    Uses ``default_i18n_domain`` setting or the package name as the domain.
+    """
+    default_domain = config.get_settings().get(
+        "default_i18n_domain", config.package.__name__
+    )
     configure_i18n(config, default_domain)

@@ -77,10 +77,20 @@ from pyramid.config import Configurator
 
 
 def i18n(config: Configurator):
-    config.include('tet.renderers.tonnikala')
+    """
+    Pyramid includeme for Tonnikala with i18n/l10n support.
+
+    Includes the base Tonnikala renderer and enables localization.
+    """
+    config.include("tet.renderers.tonnikala")
     config.set_tonnikala_l10n(True)
 
 
 def includeme(config: Configurator):
-    config.include('tonnikala.pyramid')
-    config.add_tonnikala_extensions('.tk')
+    """
+    Pyramid includeme function for Tonnikala templates.
+
+    Registers the Tonnikala renderer and adds ``.tk`` as a template extension.
+    """
+    config.include("tonnikala.pyramid")
+    config.add_tonnikala_extensions(".tk")

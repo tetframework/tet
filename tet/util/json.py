@@ -43,5 +43,11 @@ rep = re.compile('[{}]'.format(''.join(subs.keys())))
 
 
 def js_safe_dumps(s):
+    """
+    Serialize to JSON with characters escaped for safe HTML/JS embedding.
+
+    :param s: Value to serialize
+    :return: JSON string safe for embedding in HTML script tags
+    """
     rv = json.dumps(s)
     return rep.sub(lambda m: subs.get(m.group(0) or m.group(0)), rv)

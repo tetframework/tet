@@ -53,27 +53,54 @@ def _get_json_renderer_registry(config: Configurator) -> Dict[str, Any]:
     return config.registry.tet_json_renderers
 
 
-def hook_json_renderer(config: Configurator,
-                       *,
-                       renderer: Any,
-                       name: str='json'):
+def hook_json_renderer(
+    config: Configurator, *, renderer: Any, name: str = "json"
+):
+    """
+    Register a JSON renderer with the given name.
+
+    :param config: Pyramid Configurator
+    :param renderer: The JSON renderer instance
+    :param name: Name for the renderer (default: 'json')
+    """
     config.add_renderer(name, renderer)
     _get_json_renderer_registry(config)[name] = renderer
 
 
-def add_json_adapter(config: Configurator,
-                     *,
-                     for_: type,
-                     adapter: Callable[[Any], Any],
-                     renderer: str='json'):
+def add_json_adapter(
+    config: Configurator,
+    *,
+    for_: type,
+    adapter: Callable[[Any], Any],
+    renderer: str = "json",
+):
+    """
+    Add a type adapter to a JSON renderer.
+
+    :param config: Pyramid Configurator
+    :param for_: The type to adapt
+    :param adapter: Callable taking (obj, request) and returning JSON-serializable data
+    :param renderer: Name of the renderer to add the adapter to (default: 'json')
+    """
     _get_json_renderer_registry(config)[renderer].add_adapter(
-        type_or_iface=for_,
-        adapter=adapter
+        type_or_iface=for_, adapter=adapter
     )
 
 
-def construct_default_renderer(renderer_factory: Callable[..., Any]=JSON,
-                               **renderer_args):
+def construct_default_renderer(
+    renderer_factory: Callable[..., Any] = JSON, **renderer_args
+):
+    """
+    Construct a JSON renderer with default type adapters.
+
+    Adds adapters for:
+    - ``datetime.datetime`` and ``datetime.date`` (ISO 8601 format)
+    - SQLAlchemy ``AbstractKeyedTuple`` (converted to dict)
+
+    :param renderer_factory: Factory callable for creating the renderer
+    :param renderer_args: Additional arguments passed to the factory
+    :return: Configured JSON renderer instance
+    """
     json_renderer = renderer_factory(**renderer_args)
 
     try:
@@ -90,7 +117,14 @@ def construct_default_renderer(renderer_factory: Callable[..., Any]=JSON,
 
 
 def includeme(config: Configurator):
+    """
+    Pyramid includeme function for JSON rendering.
+
+    Registers a default JSON renderer and adds configuration directives:
+    - ``config.add_json_renderer()``
+    - ``config.add_json_adapter()``
+    """
     renderer = construct_default_renderer()
     hook_json_renderer(config, renderer=renderer)
-    config.add_directive('add_json_renderer', hook_json_renderer)
-    config.add_directive('add_json_adapter', add_json_adapter)
+    config.add_directive("add_json_renderer", hook_json_renderer)
+    config.add_directive("add_json_adapter", add_json_adapter)

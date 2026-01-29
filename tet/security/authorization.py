@@ -69,22 +69,38 @@ class INewAuthorizationPolicy(Interface):
 
 @implementer(IAuthorizationPolicy)
 class AuthorizationPolicyWrapper:
+    """
+    Wrapper that adapts INewAuthorizationPolicy to IAuthorizationPolicy.
+
+    Automatically injects the current request into policy method calls.
+    """
+
     def __init__(self, wrapped):
         self.wrapped = wrapped
 
     def permits(self, context, principals, permission):
+        """Check if principals are allowed the permission on context."""
         request = get_current_request()
         return self.wrapped.permits(request, context, principals, permission)
 
     def principals_allowed_by_permission(self, context, permission):
+        """Return principals allowed the permission on context."""
         request = get_current_request()
-        return self.wrapped.principals_allowed_by_permission(request,
-                                                             context,
-                                                             permission)
+        return self.wrapped.principals_allowed_by_permission(
+            request, context, permission
+        )
 
 
 def includeme(config: Configurator):
+    """
+    Pyramid includeme for custom authorization policy support.
+
+    Adds ``config.set_authorization_policy()`` directive that accepts
+    :class:`INewAuthorizationPolicy` implementations.
+    """
+
     def set_authorization_policy(config: Configurator, policy: Any) -> None:
+        """Set the authorization policy, wrapping INewAuthorizationPolicy if needed."""
         policy = config.maybe_dotted(policy)
         if isinstance(policy, INewAuthorizationPolicy):
             policy = AuthorizationPolicyWrapper(policy)
@@ -92,4 +108,4 @@ def includeme(config: Configurator):
         # noinspection PyCallByClass
         SecurityConfiguratorMixin.set_authorization_policy(config, policy)
 
-    config.add_directive('set_authorization_policy', set_authorization_policy)
+    config.add_directive("set_authorization_policy", set_authorization_policy)

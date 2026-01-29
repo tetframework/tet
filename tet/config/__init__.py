@@ -186,6 +186,19 @@ def create_configurator(
     package=None,
     **kw
 ) -> Configurator:
+    """
+    Create a Pyramid Configurator with Tet features.
+
+    :param global_config: Global configuration dict (from PasteDeploy)
+    :param settings: Application settings dict
+    :param merge_global_config: If True, merge global_config into settings
+    :param configurator_class: Configurator class to use
+    :param included_features: Tet features to include (see :data:`ALL_FEATURES`)
+    :param excluded_features: Tet features to exclude
+    :param package: Package for the configurator (defaults to caller's package)
+    :param kw: Additional arguments passed to the Configurator
+    :return: Configured Pyramid Configurator instance
+    """
     defaults = {}
     if merge_global_config and isinstance(global_config, Mapping):
         settings = ChainMap(settings, global_config, defaults)

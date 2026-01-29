@@ -36,27 +36,37 @@ maketrans = bytes.maketrans
 
 
 class BaseCodec(object):
+    """Base class for encoding codecs."""
+
     @classmethod
     def generate_characters(cls, length):
+        """Generate random characters from the codec's character set."""
         randomizer = random.SystemRandom()
         max_num = len(cls.chars) - 1
-        return b''.join(cls.chars[randomizer.randint(0, max_num)]
-            for i in range(length)).decode()
+        return b"".join(
+            cls.chars[randomizer.randint(0, max_num)] for i in range(length)
+        ).decode()
+
 
 class Base64(BaseCodec):
-    chars = (string.ascii_letters + string.digits + '+/').encode()
+    """Standard Base64 encoding."""
+
+    chars = (string.ascii_letters + string.digits + "+/").encode()
     padding = True
 
     @classmethod
     def encode(cls, string):
+        """Encode bytes to Base64."""
         return base64.b64encode(string)
 
     @classmethod
     def normalize(cls, string):
+        """Normalize input (no-op for standard Base64)."""
         return string
 
     @classmethod
     def decode(cls, string):
+        """Decode Base64 to bytes."""
         return base64.b64decode(string)
 
 _std_b32_to_crockford_b32 = maketrans(
@@ -75,34 +85,43 @@ _normalize_crockford_b32 = maketrans(
 )
 
 class CrockfordBase32(BaseCodec):
+    """
+    Crockford's Base32 encoding.
+
+    Human-friendly encoding that avoids ambiguous characters (0/O, 1/I/L).
+    Case-insensitive and handles common transcription errors.
+    """
+
     chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
     padding = False
 
     @classmethod
     def encode(cls, string, normalize=True, validate=False):
+        """Encode bytes to Crockford Base32."""
         if isinstance(string, str):
             string = string.decode()
 
         return base64.b32encode(string).translate(
-                _std_b32_to_crockford_b32, b'=').decode()
+            _std_b32_to_crockford_b32, b"="
+        ).decode()
 
     @classmethod
     def decode(cls, string, normalize=True, validate=False):
+        """Decode Crockford Base32 to bytes."""
         if normalize:
             string = cls.normalize(string)
 
         if isinstance(string, str):
             string = string.encode()
 
-        # Ensure the manatory padding is correct:
+        # Ensure the mandatory padding is correct:
         b32 = string.upper()
-        b32 += b'=' * ((8 - len(b32) % 8) % 8)
+        b32 += b"=" * ((8 - len(b32) % 8) % 8)
         return base64.b32decode(b32.translate(_crockford_b32_to_std_b32))
-
-        return base64.b
 
     @classmethod
     def normalize(cls, string):
+        """Normalize input by handling ambiguous characters (O->0, I/L->1)."""
         if isinstance(string, str):
             string = string.encode()
 

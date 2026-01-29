@@ -11,6 +11,16 @@ from pyramid.path import caller_module
 
 
 def caller_package(ignored_modules=(), caller_module=caller_module):
+    """
+    Determine the package of the calling code.
+
+    Walks up the call stack to find the first module not in ignored_modules,
+    then returns its package.
+
+    :param ignored_modules: Module names to skip when walking the stack
+    :param caller_module: Function to get caller module (for testing)
+    :return: The caller's package module
+    """
     ignored_modules = set(ignored_modules)
     ignored_modules.add(__name__)
     for i in count(3):

@@ -47,17 +47,22 @@ cachebreaker = None
 
 
 def set_cachebreaker(config, cachebreaker):
+    """Set a custom cache-breaker value."""
     config.registry.cachebreaker = cachebreaker
 
 
 def make_redirector(redirected_route):
+    """Create a view that redirects to the correct cache-breaker URL."""
+
     def redirect_breaker(request):
         current_breaker = request.registry.cachebreaker
-        breaker = request.matchdict['breaker']
-        path = request.matchdict['path']
+        breaker = request.matchdict["breaker"]
+        path = request.matchdict["path"]
 
         if breaker < current_breaker:
-            return HTTPMovedPermanently(request.route_url(redirected_route, breaker=current_breaker, path=path))
+            return HTTPMovedPermanently(
+                request.route_url(redirected_route, breaker=current_breaker, path=path)
+            )
 
         # too recent breaker
         if breaker > current_breaker:
@@ -73,20 +78,36 @@ def make_redirector(redirected_route):
 
 
 def add_static_view_with_breaker(config, name, path, **kw):
-    if not '{breaker}' in name:
-        raise ValueError("Invalid path to add_static_view_with_breaker: missing name")
+    """
+    Add a static view with cache-busting support.
 
-    url = name.replace('{breaker}', config.registry.cachebreaker)
+    :param config: Pyramid Configurator
+    :param name: URL pattern with ``{breaker}`` placeholder
+    :param path: Asset specification for static files
+    :param kw: Additional arguments passed to add_static_view
+    """
+    if "{breaker}" not in name:
+        raise ValueError(
+            "Invalid path to add_static_view_with_breaker: missing {breaker}"
+        )
+
+    url = name.replace("{breaker}", config.registry.cachebreaker)
     config.add_static_view(name=url, path=path, **kw)
 
-    redirected_route = name + '-redirect'
-    redirected_url = name.rstrip('/') + '/*path'
-    config.add_route(name=name + '-breaker',       pattern=redirected_url)
-    config.add_view(route_name=name + '-breaker',  view=make_redirector(redirected_route))
-    config.add_route(name=redirected_route,        pattern=redirected_url, static=True)
+    redirected_route = name + "-redirect"
+    redirected_url = name.rstrip("/") + "/*path"
+    config.add_route(name=name + "-breaker", pattern=redirected_url)
+    config.add_view(route_name=name + "-breaker", view=make_redirector(redirected_route))
+    config.add_route(name=redirected_route, pattern=redirected_url, static=True)
 
 
 def includeme(config):
+    """
+    Pyramid includeme for static file cache-busting.
+
+    Adds ``config.set_cachebreaker()`` and ``config.add_static_view_with_breaker()``
+    directives.
+    """
     config.registry.cachebreaker = "%012d" % int(time.time() * 1000)
-    config.add_directive('set_cachebreaker', set_cachebreaker)
-    config.add_directive('add_static_view_with_breaker', add_static_view_with_breaker)
+    config.add_directive("set_cachebreaker", set_cachebreaker)
+    config.add_directive("add_static_view_with_breaker", add_static_view_with_breaker)
