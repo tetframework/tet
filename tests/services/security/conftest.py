@@ -22,7 +22,11 @@ def pytest_collection_modifyitems(config, items):
 def _cleanup_mfa_from_previous_runs():
     """Remove MFA methods left over from a previous test run."""
     engine = create_engine(DB_URL)
-    with engine.connect() as conn:
-        conn.execute(text("DELETE FROM multi_factor_authentication_method"))
-        conn.commit()
-    engine.dispose()
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DELETE FROM multi_factor_authentication_method"))
+            conn.commit()
+    except Exception:
+        pass  # Table doesn't exist yet (fresh CI database)
+    finally:
+        engine.dispose()
