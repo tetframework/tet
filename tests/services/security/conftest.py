@@ -1,4 +1,8 @@
+import pytest
+from sqlalchemy import create_engine, text
+
 TARGET_MODULE = "test_authentication.py"
+DB_URL = "postgresql+psycopg2://test_tet:test_tet@localhost:5432/test_tet"
 
 
 def pytest_collection_modifyitems(config, items):
@@ -12,3 +16,13 @@ def pytest_collection_modifyitems(config, items):
 
     kept_items = other_items + auth_items
     items[:] = kept_items
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cleanup_mfa_from_previous_runs():
+    """Remove MFA methods left over from a previous test run."""
+    engine = create_engine(DB_URL)
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM multi_factor_authentication_method"))
+        conn.commit()
+    engine.dispose()

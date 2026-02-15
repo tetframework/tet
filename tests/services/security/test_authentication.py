@@ -1,19 +1,22 @@
+import base64
 import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
 import jwt as pyjwt
+import pyotp
 import pytest
 import requests as req_lib
-from pyramid.httpexceptions import HTTPUnauthorized
+from pyramid.httpexceptions import HTTPBadRequest, HTTPForbidden, HTTPUnauthorized
 from sqlalchemy.orm import Session
 from webtest import TestApp
 
-from tests.models.accounts import User
+from tests.models.accounts import MultiFactorAuthenticationMethod, User
 from tests.services.constants import LOGIN_ENDPOINT, ACCESS_TOKEN_HEADER_NAME, HOME_ROUTE
 from tests.services.utils.authentication import get_cookie
 from tet.security.auth import TetAuthService
-from tet.security.config import PasswordChangeData
+from tet.security.config import MultiFactorAuthMethodType, PasswordChangeData, TOTPData
+from tet.security.mfa import TetMultiFactorAuthenticationService
 from tet.security.tokens import TetTokenService
 
 
@@ -46,7 +49,7 @@ def create_user(db_session: Session):
         db_session.flush()
         return user
 
-    user = User(email="exampple2@invalid.invalid", name="example2", is_admin=True)
+    user = User(email="exampple2@invalid.invalid", name="example2", display_name="example2", is_admin=True)
     user.password = "1234@abcd"
     db_session.add(user)
     db_session.flush()
@@ -586,3 +589,568 @@ def test_change_password_endpoint_wrong_current(pyramid_test_app, capture_token,
             expect_errors=True,
         )
     assert response.status_code == 403
+
+
+# --- MFA / TOTP service tests ---
+
+
+@pytest.fixture()
+def mfa_service(pyramid_request):
+    return pyramid_request.find_service(TetMultiFactorAuthenticationService)
+
+
+def _cleanup_mfa_methods(db_session, user_id):
+    """Remove all MFA methods for a user to avoid unique constraint violations."""
+    db_session.query(MultiFactorAuthenticationMethod).filter_by(user_id=user_id).delete()
+    db_session.flush()
+
+
+@pytest.fixture()
+def clean_mfa(db_engine):
+    """Clean up all MFA methods via committed transaction (visible to webtest)."""
+    from sqlalchemy import text
+    with db_engine.connect() as conn:
+        conn.execute(text("DELETE FROM multi_factor_authentication_method"))
+        conn.commit()
+    yield
+    with db_engine.connect() as conn:
+        conn.execute(text("DELETE FROM multi_factor_authentication_method"))
+        conn.commit()
+
+
+def test_verify_totp_valid_token():
+    """verify_totp should return True for a currently valid token."""
+    secret = pyotp.random_base32()
+    token = pyotp.TOTP(secret).now()
+    assert TetMultiFactorAuthenticationService.verify_totp(secret=secret, token=token) is True
+
+
+def test_verify_totp_invalid_token():
+    """verify_totp should return False for an invalid token."""
+    secret = pyotp.random_base32()
+    assert TetMultiFactorAuthenticationService.verify_totp(secret=secret, token="000000") is False
+
+
+def test_create_mfa_method(mfa_service, db_session):
+    """create_method should persist a new MFA method."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": "test_secret"},
+    )
+    assert method is not None
+    assert method.method_type == MultiFactorAuthMethodType.TOTP
+    assert method.user_id == user.id
+    assert method.data == {"secret": "test_secret"}
+    assert method.is_active is False
+    assert method.verified is False
+
+
+def test_get_method_unverified(mfa_service, db_session):
+    """get_method should find an unverified method."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": "test_secret"},
+    )
+    found = mfa_service.get_method(
+        user_id=user.id,
+        method_type=MultiFactorAuthMethodType.TOTP,
+        is_active=False,
+        verified=False,
+    )
+    assert found is not None
+    assert found.user_id == user.id
+
+
+def test_get_method_returns_none_when_not_found(mfa_service, db_session):
+    """get_method should return None when no matching method exists."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    result = mfa_service.get_method(
+        user_id=user.id,
+        method_type=MultiFactorAuthMethodType.TOTP,
+        is_active=True,
+        verified=True,
+    )
+    assert result is None
+
+
+def test_is_totp_mfa_enabled_false(mfa_service, db_session):
+    """is_totp_mfa_enabled should return False when no active TOTP exists."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    assert mfa_service.is_totp_mfa_enabled(user_id=user.id) is False
+
+
+def test_is_totp_mfa_enabled_true(mfa_service, db_session):
+    """is_totp_mfa_enabled should return True when active verified TOTP exists."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": pyotp.random_base32()},
+    )
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    assert mfa_service.is_totp_mfa_enabled(user_id=user.id) is True
+
+
+def test_get_active_methods_by_user_id(mfa_service, db_session):
+    """get_active_methods_by_user_id should return only active+verified methods."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": pyotp.random_base32()},
+    )
+
+    # Inactive method should not be returned
+    methods = mfa_service.get_active_methods_by_user_id(user_id=user.id)
+    assert len(methods) == 0
+
+    # Activate it
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    methods = mfa_service.get_active_methods_by_user_id(user_id=user.id)
+    assert len(methods) == 1
+    assert methods[0].method_type == MultiFactorAuthMethodType.TOTP
+
+
+def test_disable_method(mfa_service, db_session):
+    """disable_method should deactivate and unverify the method."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": "test_secret"},
+    )
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    mfa_service.disable_method(user_id=user.id, method_type=MultiFactorAuthMethodType.TOTP)
+    db_session.flush()
+
+    active = mfa_service.get_method(
+        user_id=user.id,
+        method_type=MultiFactorAuthMethodType.TOTP,
+        is_active=True,
+        verified=True,
+    )
+    assert active is None
+
+
+def test_handle_totp_setup(mfa_service, db_session):
+    """handle_totp_setup should create a TOTP method and return secret + QR code."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    result = mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    assert "secret" in result
+    assert "qr_code" in result
+    assert result["qr_code"].startswith("data:image/svg+xml;base64,")
+    assert len(result["secret"]) > 0
+
+
+def test_handle_totp_verify_success(mfa_service, db_session):
+    """handle_totp_verify should activate the method on valid TOTP token."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    setup_result = mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    secret = setup_result["secret"]
+
+    # Generate a valid TOTP token for the current time
+    valid_token = pyotp.TOTP(secret).now()
+
+    result = mfa_service.handle_totp_verify(
+        user_id=user.id, token=valid_token, setup_key=secret,
+    )
+    assert result["success"] is True
+
+    # Method should now be active and verified
+    method = mfa_service.get_method(
+        user_id=user.id,
+        method_type=MultiFactorAuthMethodType.TOTP,
+        is_active=True,
+        verified=True,
+    )
+    assert method is not None
+
+
+def test_handle_totp_verify_invalid_token(mfa_service, db_session):
+    """handle_totp_verify should raise HTTPForbidden on invalid TOTP token."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    setup_result = mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    secret = setup_result["secret"]
+
+    with pytest.raises(HTTPForbidden):
+        mfa_service.handle_totp_verify(
+            user_id=user.id, token="000000", setup_key=secret,
+        )
+
+
+def test_handle_totp_verify_no_method(mfa_service, db_session):
+    """handle_totp_verify should raise HTTPForbidden when no unverified method exists."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    with pytest.raises(HTTPForbidden):
+        mfa_service.handle_totp_verify(
+            user_id=user.id, token="123456", setup_key="some_secret",
+        )
+
+
+def test_handle_totp_verify_missing_setup_key(mfa_service, db_session):
+    """handle_totp_verify should raise HTTPBadRequest when setup_key is None."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+
+    with pytest.raises(HTTPBadRequest):
+        mfa_service.handle_totp_verify(
+            user_id=user.id, token="123456", setup_key=None,
+        )
+
+
+def test_handle_totp_challenge_success(mfa_service, db_session, pyramid_request):
+    """handle_totp_challenge should verify TOTP and return access + refresh tokens."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    secret = pyotp.random_base32()
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": secret},
+    )
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    # Set up request body for the event notification
+    pyramid_request.body = json.dumps(
+        {"user_identity": "exampple2@invalid.invalid"}
+    ).encode("utf-8")
+    pyramid_request.content_type = "application/json"
+
+    valid_token = pyotp.TOTP(secret).now()
+    result = mfa_service.handle_totp_challenge(
+        user_id=user.id, totp_token=valid_token,
+    )
+    assert result["success"] is True
+    assert "access_token" in result
+    assert "refresh_token" in result
+
+
+def test_handle_totp_challenge_invalid_token(mfa_service, db_session):
+    """handle_totp_challenge should raise HTTPForbidden on invalid TOTP."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    secret = pyotp.random_base32()
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={"secret": secret},
+    )
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    with pytest.raises(HTTPForbidden):
+        mfa_service.handle_totp_challenge(
+            user_id=user.id, totp_token="000000",
+        )
+
+
+def test_handle_totp_challenge_no_method(mfa_service, db_session):
+    """handle_totp_challenge should raise HTTPForbidden when no active method exists."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    with pytest.raises(HTTPForbidden):
+        mfa_service.handle_totp_challenge(
+            user_id=user.id, totp_token="123456",
+        )
+
+
+def test_handle_totp_challenge_missing_secret_in_data(mfa_service, db_session):
+    """handle_totp_challenge should raise HTTPBadRequest when method data has no secret."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    method = mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={},  # No secret
+    )
+    method.is_active = True
+    method.verified = True
+    db_session.flush()
+
+    with pytest.raises(HTTPBadRequest):
+        mfa_service.handle_totp_challenge(
+            user_id=user.id, totp_token="123456",
+        )
+
+
+def test_generate_qr_img():
+    """generate_qr_img should return a base64-encoded SVG."""
+    class FakeUser:
+        display_name = "Test User"
+
+    secret = pyotp.random_base32()
+    data = TOTPData(secret=secret, issuer="test")
+
+    result = TetMultiFactorAuthenticationService.generate_qr_img(
+        user=FakeUser(), mfa_secret=secret, data=data,
+    )
+    decoded = base64.b64decode(result)
+    assert b"svg" in decoded.lower()
+
+
+# --- MFA view integration tests ---
+
+
+def test_mfa_setup_and_verify_flow(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Full TOTP setup + verify flow through HTTP endpoints."""
+    # Login to get access token
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    auth_headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
+
+    # Setup TOTP
+    setup_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    secret = setup_resp.json["secret"]
+    assert "qr_code" in setup_resp.json
+    assert setup_resp.json["qr_code"].startswith("data:image/svg+xml;base64,")
+
+    # Generate valid TOTP token and verify
+    valid_token = pyotp.TOTP(secret).now()
+    verify_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/verify",
+        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    assert verify_resp.json["success"] is True
+
+
+def test_mfa_get_methods_returns_active(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """GET /mfa/methods should list active MFA methods after setup+verify."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    auth_headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
+
+    # Setup + verify TOTP
+    setup_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    secret = setup_resp.json["secret"]
+    valid_token = pyotp.TOTP(secret).now()
+    pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/verify",
+        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+
+    # Check methods
+    methods_resp = pyramid_test_app.get(
+        "/api/v1/auth/mfa/methods",
+        headers=auth_headers,
+        status=200,
+    )
+    assert "method_types" in methods_resp.json
+    assert "totp" in methods_resp.json["method_types"]
+
+
+def test_mfa_disable_method(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """POST /mfa/app/disable should deactivate a TOTP method."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    auth_headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
+
+    # Setup + verify TOTP
+    setup_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    secret = setup_resp.json["secret"]
+    valid_token = pyotp.TOTP(secret).now()
+    pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/verify",
+        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+
+    # Disable TOTP
+    disable_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/disable",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    assert disable_resp.json["success"] is True
+
+    # Verify it's gone
+    methods_resp = pyramid_test_app.get(
+        "/api/v1/auth/mfa/methods",
+        headers=auth_headers,
+        status=200,
+    )
+    assert "totp" not in methods_resp.json.get("method_types", [])
+
+
+def test_login_with_totp_challenge(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Login with TOTP token should succeed when MFA is enabled."""
+    # Login without MFA first
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    auth_headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
+
+    # Setup + verify TOTP
+    setup_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    secret = setup_resp.json["secret"]
+    valid_token = pyotp.TOTP(secret).now()
+    pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/verify",
+        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+
+    # Now login with TOTP - generate a fresh token
+    totp_token = pyotp.TOTP(secret).now()
+    mfa_login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({
+            "user_identity": "exampple2@invalid.invalid",
+            "password": "1234@abcd",
+            "totp_token": totp_token,
+        }),
+        content_type="application/json",
+        status=200,
+    )
+    assert mfa_login_resp.json["success"] is True
+    assert "access_token" in mfa_login_resp.json
+    assert "refresh_token" in mfa_login_resp.json
+
+
+def test_login_without_totp_returns_mfa_required(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Login without TOTP token should return mfa_required when MFA is enabled."""
+    # Login and setup TOTP
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    auth_headers = {ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"}
+
+    setup_resp = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "totp"}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+    secret = setup_resp.json["secret"]
+    valid_token = pyotp.TOTP(secret).now()
+    pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/verify",
+        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        headers=auth_headers,
+        content_type="application/json",
+        status=200,
+    )
+
+    # Login WITHOUT totp_token -> should get mfa_required
+    mfa_login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({
+            "user_identity": "exampple2@invalid.invalid",
+            "password": "1234@abcd",
+        }),
+        content_type="application/json",
+        status=200,
+    )
+    assert mfa_login_resp.json["success"] is True
+    assert mfa_login_resp.json.get("mfa_required") is True
+    assert "access_token" not in mfa_login_resp.json
