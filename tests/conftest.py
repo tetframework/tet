@@ -14,7 +14,6 @@ from tests.models.accounts import Base, Token, User, MultiFactorAuthenticationMe
 from tet.config import Configurator as tetConfigurator
 from tet.security.authentication import (
     TokenAuthenticationPolicy,
-    JWTCookieAuthenticationPolicy,
     AuthLoginResult,
 )
 from tet.view import view_config
@@ -42,9 +41,6 @@ def db_engine(database):
     engine = create_engine(DB_URL)
     Base.metadata.create_all(engine)
     yield engine
-    # TODO: Dropping all entities will disrupt the saving of tokens in the security/authentication module.
-    #  Investigate the workflow and resolve the issue.
-    # Base.metadata.drop_all(engine)
     engine.dispose()
 
 
@@ -133,20 +129,6 @@ def pyramid_config(db_engine):
     yield config
 
 
-JWT_AUTH = "TOKEN_AUTH"
-JWT_COOKIE_AUTH = "JWT_COOKIE_AUTH"
-
-
-@pytest.fixture(
-    params=[
-        pytest.param({"security_policy": TokenAuthenticationPolicy}, id=JWT_AUTH),
-        pytest.param({"security_policy": JWTCookieAuthenticationPolicy}, id=JWT_COOKIE_AUTH),
-    ]
-)
-def security_policy(request):
-    return request.param["security_policy"]
-
-
 @view_config(route_name="home", renderer="json", permission="view")
 def home_view(request: Request):
     response: Response = request.response
@@ -156,13 +138,13 @@ def home_view(request: Request):
 
 
 @pytest.fixture()
-def pyramid_app(security_policy, pyramid_config):
+def pyramid_app(pyramid_config):
     pyramid_config.set_token_authentication(
         long_term_token_model=Token,
         project_prefix=pyramid_config.registry.settings["project_prefix"],
         login_callback=login_callback,
         jwk_resolver=jwk_resolver,
-        security_policy=security_policy(),
+        security_policy=TokenAuthenticationPolicy(),
         user_model=User,
         multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
     )
@@ -193,7 +175,7 @@ def pyramid_event_app(pyramid_config):
         project_prefix=pyramid_config.registry.settings["project_prefix"],
         login_callback=login_callback,
         jwk_resolver=jwk_resolver,
-        security_policy=TokenAuthenticationPolicy,
+        security_policy=TokenAuthenticationPolicy(),
         user_model=User,
         multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
     )

@@ -10,7 +10,9 @@ from pyramid.httpexceptions import HTTPUnauthorized
 from webtest import TestApp
 
 from tests.services.constants import LOGIN_ENDPOINT
-from tet.security.authentication import TetTokenService, AuthViews, AuthLoginResult
+from tet.security.tokens import TetTokenService
+from tet.security.views import AuthViews
+from tet.security.config import AuthLoginResult
 from tet.security.events import AuthnLoginSuccess, AuthnLoginFail
 
 logger = l.getLogger(__name__)
@@ -107,7 +109,7 @@ def structlog_security_config():
 
 
 @pytest.fixture()
-def pyramid_test_app_with_jwt_cookie_policy(request, pyramid_app):
+def pyramid_test_app(pyramid_app):
     return TestApp(pyramid_app)
 
 
@@ -143,13 +145,13 @@ DEFAULT_USER_PASSWORD = "1234@abcd"
 
 
 def test_login_view_emits_success_event(
-    pyramid_test_app_with_jwt_cookie_policy,
+    pyramid_test_app,
     capture_token,
     pyramid_request,
     caplog,
     structlog_security_config,
 ):
-    app = pyramid_test_app_with_jwt_cookie_policy
+    app = pyramid_test_app
     data = json.dumps({"user_identity": DEFAULT_USER_IDENTITY, "password": DEFAULT_USER_PASSWORD})
     expected_description = f"User {DEFAULT_USER_IDENTITY} logged in successfully."
 
@@ -170,9 +172,9 @@ def test_login_view_emits_success_event(
 
 
 def test_login_view_emits_fail_event(
-    pyramid_test_app_with_jwt_cookie_policy, pyramid_request, caplog, structlog_security_config
+    pyramid_test_app, pyramid_request, caplog, structlog_security_config
 ):
-    app = pyramid_test_app_with_jwt_cookie_policy
+    app = pyramid_test_app
     data = json.dumps({"user_identity": DEFAULT_USER_IDENTITY, "password": "wrong_password"})
 
     with caplog.at_level("WARNING", logger="audit"):
@@ -193,13 +195,19 @@ def test_login_view_emits_fail_event(
     )
 
 
+def _setup_event_request(request):
+    """Set up registry attributes needed by AuthViews on a DummyRequest."""
+    request.registry.tet_auth_route_prefix = "/auth"
+
+
 def test_login_notify_success(pyramid_event_request):
     request = pyramid_event_request
+    _setup_event_request(request)
     request.registry.tet_auth_login_callback = lambda req: AuthLoginResult(
         user_id=1, user_identity=DEFAULT_USER_IDENTITY, success=True
     )
 
-    view = AuthViews(request, route_prefix="/auth")
+    view = AuthViews(request)
     view.token_service.create_long_term_token = MagicMock(return_value="refresh")
     view.token_service.create_short_term_jwt = MagicMock(return_value="access")
     view.multi_factor_auth_service.is_totp_mfa_enabled = MagicMock(return_value=False)
@@ -216,11 +224,12 @@ def test_login_notify_success(pyramid_event_request):
 
 def test_login_notify_fail(pyramid_event_request):
     request = pyramid_event_request
+    _setup_event_request(request)
     request.registry.tet_auth_login_callback = lambda req: AuthLoginResult(
         user_id=None, user_identity=DEFAULT_USER_IDENTITY
     )
 
-    view = AuthViews(request, route_prefix="/auth")
+    view = AuthViews(request)
     view.token_service.create_long_term_token = MagicMock(return_value="refresh")
     view.token_service.create_short_term_jwt = MagicMock(return_value="access")
     view.multi_factor_auth_service.is_totp_mfa_enabled = MagicMock(return_value=False)
