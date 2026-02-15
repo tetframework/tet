@@ -37,7 +37,7 @@ class TetAuthService(RequestScopedBaseService):
 
     @property
     def _cookie_path(self) -> str:
-        return f"{self.route_prefix}/"
+        return f"/{self.route_prefix}/" if self.route_prefix else "/"
 
     def set_cookies(
         self,
