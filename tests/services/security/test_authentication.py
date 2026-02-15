@@ -7,7 +7,8 @@ import jwt as pyjwt
 import pyotp
 import pytest
 import requests as req_lib
-from pyramid.httpexceptions import HTTPBadRequest, HTTPForbidden, HTTPUnauthorized
+from pyramid.httpexceptions import HTTPBadRequest, HTTPForbidden, HTTPInternalServerError, HTTPUnauthorized
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from webtest import TestApp
 
@@ -1154,3 +1155,339 @@ def test_login_without_totp_returns_mfa_required(pyramid_test_app, capture_token
     assert mfa_login_resp.json["success"] is True
     assert mfa_login_resp.json.get("mfa_required") is True
     assert "access_token" not in mfa_login_resp.json
+
+
+# --- MFA service error path tests ---
+
+
+def test_handle_totp_verify_key_error(mfa_service, db_session):
+    """KeyError in handle_totp_verify should raise HTTPBadRequest."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "verify_totp", side_effect=KeyError("missing")
+    ):
+        with pytest.raises(HTTPBadRequest):
+            mfa_service.handle_totp_verify(
+                user_id=user.id, token="123456", setup_key="some_secret",
+            )
+
+
+def test_handle_totp_verify_generic_exception(mfa_service, db_session):
+    """Generic exception in handle_totp_verify should raise HTTPInternalServerError."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "verify_totp", side_effect=RuntimeError("unexpected")
+    ):
+        with pytest.raises(HTTPInternalServerError):
+            mfa_service.handle_totp_verify(
+                user_id=user.id, token="123456", setup_key="some_secret",
+            )
+
+
+def test_handle_totp_setup_generic_exception(mfa_service, db_session):
+    """Generic exception in handle_totp_setup should return error dict."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "_create_totp_data", side_effect=RuntimeError("fail")
+    ):
+        result = mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    assert result["success"] is False
+
+
+# --- View error path tests ---
+
+
+def test_refresh_token_with_no_body(pyramid_test_app):
+    """refresh_token with empty body and no cookie should hit except path and return 401."""
+    pyramid_test_app.cookiejar.clear()
+    response = pyramid_test_app.post(
+        "/api/v1/auth/token/refresh",
+        status=401,
+        expect_errors=True,
+    )
+    assert response.status_code == 401
+
+
+def test_login_key_error_returns_400(pyramid_test_app, capture_token, pyramid_request):
+    """KeyError inside login try block should return 400."""
+    with patch.object(TetTokenService, "create_long_term_token", side_effect=KeyError("field")):
+        response = pyramid_test_app.post(
+            LOGIN_ENDPOINT,
+            params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+            content_type="application/json",
+            status=400,
+            expect_errors=True,
+        )
+    assert response.status_code == 400
+
+
+def test_login_generic_exception_returns_500(pyramid_test_app, capture_token, pyramid_request):
+    """Generic exception inside login try block should return 500."""
+    with patch.object(TetTokenService, "create_long_term_token", side_effect=RuntimeError("unexpected")):
+        response = pyramid_test_app.post(
+            LOGIN_ENDPOINT,
+            params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+            content_type="application/json",
+            status=500,
+            expect_errors=True,
+        )
+    assert response.status_code == 500
+
+
+def test_logout_unauthenticated_returns_401(pyramid_test_app):
+    """Logout without authentication should return 401 (user not found)."""
+    pyramid_test_app.cookiejar.clear()
+    response = pyramid_test_app.post(
+        "/api/v1/auth/logout",
+        content_type="application/json",
+        status=401,
+        expect_errors=True,
+    )
+    assert response.status_code == 401
+
+
+def test_logout_db_error_returns_403(pyramid_test_app, capture_token, pyramid_request):
+    """SQLAlchemy error during logout should return 403."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    refresh_token = login_resp.json["refresh_token"]
+    _set_refresh_cookie(pyramid_test_app, refresh_token)
+
+    with patch.object(TetTokenService, "delete_token", side_effect=SQLAlchemyError("db error")):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/logout",
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_logout_generic_exception_returns_403(pyramid_test_app, capture_token, pyramid_request):
+    """Generic exception during logout should return 403."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    refresh_token = login_resp.json["refresh_token"]
+    _set_refresh_cookie(pyramid_test_app, refresh_token)
+
+    with patch.object(TetTokenService, "delete_token", side_effect=RuntimeError("unexpected")):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/logout",
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_change_password_http_exception(pyramid_test_app, capture_token, pyramid_request):
+    """HTTPException during change_password should be re-raised."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    refresh_token = login_resp.json["refresh_token"]
+    _set_refresh_cookie(pyramid_test_app, refresh_token)
+
+    with patch.object(TetAuthService, "change_password", side_effect=HTTPUnauthorized()):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/users/me/password",
+            params=json.dumps({"currentPassword": "x", "newPassword": "new_pw_123456"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=401,
+            expect_errors=True,
+        )
+    assert response.status_code == 401
+
+
+def test_change_password_generic_exception(pyramid_test_app, capture_token, pyramid_request):
+    """Generic exception during change_password should return 403."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    refresh_token = login_resp.json["refresh_token"]
+    _set_refresh_cookie(pyramid_test_app, refresh_token)
+
+    with patch.object(TetAuthService, "change_password", side_effect=RuntimeError("unexpected")):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/users/me/password",
+            params=json.dumps({"currentPassword": "x", "newPassword": "new_pw_123456"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_revoke_other_tokens_success(pyramid_test_app, capture_token, pyramid_request):
+    """Revoking other tokens with correct password should succeed."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(TetAuthService, "verify_password", return_value=True), \
+         patch.object(TetTokenService, "delete_other_tokens"):
+        response = pyramid_test_app.delete(
+            "/api/v1/auth/users/me/tokens/others",
+            params=json.dumps({"password": "1234@abcd"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=200,
+        )
+    assert response.json["success"] is True
+
+
+def test_revoke_other_tokens_wrong_password(pyramid_test_app, capture_token, pyramid_request):
+    """Revoking other tokens with wrong password should return 401."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(TetAuthService, "verify_password", return_value=False):
+        response = pyramid_test_app.delete(
+            "/api/v1/auth/users/me/tokens/others",
+            params=json.dumps({"password": "wrong"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=401,
+            expect_errors=True,
+        )
+    assert response.status_code == 401
+
+
+def test_revoke_other_tokens_generic_exception(pyramid_test_app, capture_token, pyramid_request):
+    """Generic exception during revoke should return 403."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(TetAuthService, "verify_password", return_value=True), \
+         patch.object(TetTokenService, "delete_other_tokens", side_effect=RuntimeError("fail")):
+        response = pyramid_test_app.delete(
+            "/api/v1/auth/users/me/tokens/others",
+            params=json.dumps({"password": "1234@abcd"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_disable_mfa_generic_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Generic exception during disable_mfa should return 403."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "disable_method", side_effect=RuntimeError("fail")
+    ):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/mfa/app/disable",
+            params=json.dumps({"method_type": "totp"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_get_mfa_methods_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Exception in get_mfa_methods should return 500."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService,
+        "get_active_methods_by_user_id",
+        side_effect=RuntimeError("fail"),
+    ):
+        response = pyramid_test_app.get(
+            "/api/v1/auth/mfa/methods",
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            status=500,
+            expect_errors=True,
+        )
+    assert response.status_code == 500
+
+
+def test_generate_mfa_totp_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """Exception in generate_mfa_totp should return 500."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "handle_totp_setup", side_effect=RuntimeError("fail")
+    ):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/mfa/app/setup",
+            params=json.dumps({"method_type": "totp"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=500,
+            expect_errors=True,
+        )
+    assert response.status_code == 500
