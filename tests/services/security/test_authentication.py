@@ -231,7 +231,7 @@ def test_verify_jwt_returns_none_for_invalid_signature(token_service):
         "exp": datetime.now(timezone.utc) + timedelta(hours=1),
         "iat": datetime.now(timezone.utc),
     }
-    bad_token = pyjwt.encode(wrong_payload, "wrong-secret", algorithm="HS256")
+    bad_token = pyjwt.encode(wrong_payload, "wrong-secret-key-at-least-32-bytes!", algorithm="HS256")
     result = token_service.verify_jwt(bad_token)
     assert result is None
 

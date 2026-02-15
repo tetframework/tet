@@ -5,7 +5,7 @@ import typing as tp
 import pytest
 from pyramid.request import Request
 from pyramid.response import Response
-from pyramid.security import Allow, Authenticated, Everyone, Deny
+from pyramid.authorization import Allow, Authenticated, Everyone, Deny
 from pyramid.testing import setUp, tearDown
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session

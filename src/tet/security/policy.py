@@ -4,7 +4,7 @@ from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.authorization import ACLHelper
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import Request
-from pyramid.security import Everyone, Authenticated
+from pyramid.authorization import Everyone, Authenticated
 from zope.interface import implementer
 
 
