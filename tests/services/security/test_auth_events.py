@@ -9,6 +9,7 @@ from pyramid.events import subscriber
 from pyramid.httpexceptions import HTTPUnauthorized
 from webtest import TestApp
 
+from tests.models.accounts import User
 from tests.services.constants import LOGIN_ENDPOINT
 from tet.security.tokens import TetTokenService
 from tet.security.views import AuthViews
@@ -142,6 +143,18 @@ def capture_token(monkeypatch, token_service, db_session):
 
 DEFAULT_USER_IDENTITY = "exampple2@invalid.invalid"
 DEFAULT_USER_PASSWORD = "1234@abcd"
+
+
+@pytest.fixture(autouse=True)
+def ensure_test_user(db_session):
+    """Ensure the test user exists before any test in this module."""
+    user = db_session.query(User).filter(User.email == DEFAULT_USER_IDENTITY).one_or_none()
+    if not user:
+        user = User(email=DEFAULT_USER_IDENTITY, name="example2", is_admin=True)
+        user.password = DEFAULT_USER_PASSWORD
+        db_session.add(user)
+        db_session.flush()
+    return user
 
 
 def test_login_view_emits_success_event(
