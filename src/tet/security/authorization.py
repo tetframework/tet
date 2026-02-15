@@ -101,7 +101,7 @@ def includeme(config: Configurator):
     def set_authorization_policy(config: Configurator, policy: Any) -> None:
         """Set the authorization policy, wrapping INewAuthorizationPolicy if needed."""
         policy = config.maybe_dotted(policy)
-        if isinstance(policy, INewAuthorizationPolicy):
+        if INewAuthorizationPolicy.providedBy(policy):
             policy = AuthorizationPolicyWrapper(policy)
 
         # noinspection PyCallByClass

@@ -78,14 +78,8 @@ def test_set_authorization_policy_directive_with_standard_policy():
     mock_set.assert_called_once_with(config, mock_policy)
 
 
-def test_set_authorization_policy_isinstance_check_is_broken():
-    """The isinstance check with zope Interface never triggers.
-
-    authorization.py line 48 uses ``isinstance(policy, INewAuthorizationPolicy)``
-    but zope Interfaces don't support Python's isinstance(); it should use
-    ``INewAuthorizationPolicy.providedBy(policy)`` instead. As a result, the
-    AuthorizationPolicyWrapper wrapping branch is dead code.
-    """
+def test_set_authorization_policy_directive_wraps_new_policy():
+    """The directive should wrap INewAuthorizationPolicy implementations."""
 
     @implementer(INewAuthorizationPolicy)
     class NewPolicy:
@@ -95,7 +89,19 @@ def test_set_authorization_policy_isinstance_check_is_broken():
         def principals_allowed_by_permission(self, request, context, permission):
             return set()
 
-    policy = NewPolicy()
-    # providedBy works, isinstance does not
-    assert INewAuthorizationPolicy.providedBy(policy) is True
-    assert isinstance(policy, INewAuthorizationPolicy) is False
+    config = MagicMock(spec=Configurator)
+    includeme(config)
+
+    directive_fn = config.add_directive.call_args[0][1]
+
+    new_policy = NewPolicy()
+    config.maybe_dotted.return_value = new_policy
+
+    with patch(
+        "tet.security.authorization.SecurityConfiguratorMixin.set_authorization_policy"
+    ) as mock_set:
+        directive_fn(config, new_policy)
+
+    actual_policy = mock_set.call_args[0][1]
+    assert isinstance(actual_policy, AuthorizationPolicyWrapper)
+    assert actual_policy.wrapped is new_policy
