@@ -52,6 +52,12 @@ class AuthViews:
             self.registry.tet_auth_cookie_attributes
         )
 
+    def _require_authenticated_userid(self) -> tp.Any:
+        user_id = self.request.authenticated_userid
+        if user_id is None:
+            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        return user_id
+
     def login(self) -> dict[str, tp.Any]:
         auth_result: AuthLoginResult = self.login_callback(self.request)
         user_id = auth_result.user_id
@@ -93,18 +99,18 @@ class AuthViews:
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
             logger.exception(f"Missing required field during login: {str(e)}")
-            raise HTTPBadRequest(json_body={"message": "Missing required field."}) from e
-        except HTTPException:
+            return HTTPBadRequest(json_body={"message": "Missing required field."})
+        except HTTPException as e:
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
-            raise
+            return e
         except Exception as e:
             logger.exception(f"Error during login: {str(e)}")
             self.registry.notify(
                 security_events.AuthnLoginFail(request=self.request, user_identity=user_identity)
             )
-            raise HTTPInternalServerError(json_body={"message": "Login failed"}) from e
+            return HTTPInternalServerError(json_body={"message": "Login failed"})
 
     def mfa_verify(self) -> dict:
         """
@@ -116,9 +122,7 @@ class AuthViews:
         Returns:
             dict: Result of the TOTP verification for the user.
         """
-        user_id = self.request.authenticated_userid
-        if not user_id:
-            raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+        user_id = self._require_authenticated_userid()
 
         payload = self.request.json_body
         token = payload["token"]
@@ -143,17 +147,14 @@ class AuthViews:
         return {"success": True, "access_token": access_token}
 
     def change_password(self):
-        user_id = self.request.authenticated_userid
+        user_id = None
         data = self.request.json_body
         payload = PasswordChangeData(
             current_password=data["currentPassword"],
             new_password=data["newPassword"],
         )
         try:
-            if user_id is None:
-                raise HTTPUnauthorized(
-                    json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE, "success": False}
-                )
+            user_id = self._require_authenticated_userid()
             user = self.auth_service.get_current_user(user_id)
             is_valid = self.auth_service.change_password(payload=payload, user=user)
             self.token_service.delete_other_tokens(user=user)
@@ -179,7 +180,7 @@ class AuthViews:
                     request=self.request, authenticated_userid=user_id
                 )
             )
-            raise e
+            return e
         except Exception as e:
             logger.exception(f"Error changing password: {e}")
             self.registry.notify(
@@ -192,8 +193,9 @@ class AuthViews:
             )
 
     def logout(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPForbidden, Response]:
-        user_id = self.request.authenticated_userid
+        user_id = None
         try:
+            user_id = self._require_authenticated_userid()
             user = self.auth_service.get_current_user(user_id=user_id)
             if not user:
                 raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
@@ -216,7 +218,7 @@ class AuthViews:
                     request=self.request, user_id=user_id
                 )
             )
-            raise e
+            return e
         except SQLAlchemyError as e:
             logger.exception(f"Database error during logout: {e}")
             self.registry.notify(
@@ -235,12 +237,11 @@ class AuthViews:
             return HTTPForbidden(json_body={"message": "Failed to logout", "success": False})
 
     def disable_mfa_method(self):
-        user_id = self.request.authenticated_userid
+        user_id = None
         payload = self.request.json_body
         mfa_method_type = MultiFactorAuthMethodType(payload["method_type"])
         try:
-            if user_id is None:
-                raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
+            user_id = self._require_authenticated_userid()
             if not mfa_method_type:
                 raise HTTPForbidden(json_body={"message": "Invalid MFA method type"})
             self.multi_factor_auth_service.disable_method(
@@ -262,7 +263,7 @@ class AuthViews:
                     method=mfa_method_type.value if mfa_method_type else None,
                 )
             )
-            raise e
+            return e
         except Exception as e:
             logger.exception(f"Error disabling MFA method: {e}")
             self.registry.notify(
@@ -275,10 +276,11 @@ class AuthViews:
             return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
 
     def revoke_other_tokens(self):
-        user_id = self.request.authenticated_userid
-        user = self.auth_service.get_current_user(user_id=user_id)
+        user_id = None
         payload = self.request.json_body
         try:
+            user_id = self._require_authenticated_userid()
+            user = self.auth_service.get_current_user(user_id=user_id)
             if user is None:
                 raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
 
@@ -302,7 +304,7 @@ class AuthViews:
                     authenticated_userid=user_id,
                 )
             )
-            raise e
+            return e
         except Exception as e:
             logger.exception(f"Error revoking other tokens: {e}")
             self.registry.notify(
@@ -316,10 +318,8 @@ class AuthViews:
             )
 
     def get_mfa_methods(self) -> dict[str, tp.List[tp.Any]]:
-        user_id = self.request.authenticated_userid
+        user_id = self._require_authenticated_userid()
         try:
-            if user_id is None:
-                raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
             mfa_methods: tp.List[tp.Any] = (
                 self.multi_factor_auth_service.get_active_methods_by_user_id(user_id=user_id)
             )
@@ -333,13 +333,10 @@ class AuthViews:
             ) from e
 
     def generate_mfa_totp(self):
-        user_id = self.request.authenticated_userid
+        user_id = self._require_authenticated_userid()
         user = self.auth_service.get_current_user(user_id=user_id)
         payload = self.request.json_body
         try:
-            if user_id is None:
-                raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-
             if payload["method_type"] == MultiFactorAuthMethodType.TOTP.value:
                 return self.multi_factor_auth_service.handle_totp_setup(
                     user=user, project_prefix=self.project_prefix

@@ -249,8 +249,8 @@ def test_login_notify_fail(pyramid_event_request):
     view.auth_service.set_cookies = MagicMock()
 
     with patch.object(request.registry, "notify") as mock_notify:
-        with pytest.raises(HTTPUnauthorized):
-            view.login()
+        result = view.login()
+        assert isinstance(result, HTTPUnauthorized)
         expected_event = AuthnLoginFail(
             user_identity=DEFAULT_USER_IDENTITY,
             request=request,

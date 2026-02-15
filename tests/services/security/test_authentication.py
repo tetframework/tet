@@ -1491,3 +1491,223 @@ def test_generate_mfa_totp_exception(pyramid_test_app, capture_token, pyramid_re
             expect_errors=True,
         )
     assert response.status_code == 500
+
+
+# --- views.py: additional coverage ---
+
+
+def test_logout_user_not_found_returns_401(pyramid_test_app, capture_token, pyramid_request):
+    """Logout with valid token but user not found in DB should return 401."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+    refresh_token = login_resp.json["refresh_token"]
+    _set_refresh_cookie(pyramid_test_app, refresh_token)
+
+    with patch.object(TetAuthService, "get_current_user", return_value=None):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/logout",
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=401,
+            expect_errors=True,
+        )
+    assert response.status_code == 401
+
+
+def test_disable_mfa_http_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """HTTPException in disable_mfa should fire audit event and return error."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "disable_method", side_effect=HTTPForbidden()
+    ):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/mfa/app/disable",
+            params=json.dumps({"method_type": "totp"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_revoke_other_tokens_user_not_found(pyramid_test_app, capture_token, pyramid_request):
+    """Revoke tokens when user not found in DB should return 401."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(TetAuthService, "get_current_user", return_value=None):
+        response = pyramid_test_app.delete(
+            "/api/v1/auth/users/me/tokens/others",
+            params=json.dumps({"password": "1234@abcd"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=401,
+            expect_errors=True,
+        )
+    assert response.status_code == 401
+
+
+def test_get_mfa_methods_http_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """HTTPException in get_mfa_methods should be re-raised."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService,
+        "get_active_methods_by_user_id",
+        side_effect=HTTPForbidden(),
+    ):
+        response = pyramid_test_app.get(
+            "/api/v1/auth/mfa/methods",
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+def test_generate_mfa_totp_non_totp_method(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """generate_mfa_totp with non-TOTP method_type should return None (200)."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    response = pyramid_test_app.post(
+        "/api/v1/auth/mfa/app/setup",
+        params=json.dumps({"method_type": "hotp"}),
+        headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+        content_type="application/json",
+        status=200,
+    )
+    assert response.json is None
+
+
+def test_generate_mfa_totp_http_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
+    """HTTPException in generate_mfa_totp should be re-raised."""
+    login_resp = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=200,
+    )
+    access_token = login_resp.json["access_token"]
+
+    with patch.object(
+        TetMultiFactorAuthenticationService, "handle_totp_setup", side_effect=HTTPForbidden()
+    ):
+        response = pyramid_test_app.post(
+            "/api/v1/auth/mfa/app/setup",
+            params=json.dumps({"method_type": "totp"}),
+            headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
+            content_type="application/json",
+            status=403,
+            expect_errors=True,
+        )
+    assert response.status_code == 403
+
+
+# --- tokens.py: remaining uncovered lines ---
+
+
+def test_retrieve_and_validate_token_expired(token_service, db_session):
+    """Expired token should raise ValueError."""
+    expired_time = datetime.now(timezone.utc) - timedelta(hours=1)
+    token = token_service.create_long_term_token(
+        user_id=1,
+        project_prefix="tet",
+        expire_timestamp=expired_time,
+    )
+    with pytest.raises(ValueError, match="Token expired"):
+        token_service.retrieve_and_validate_token(token=token, prefix="tet")
+
+
+def test_delete_other_tokens(token_service, db_session, pyramid_request):
+    """delete_other_tokens should delete all tokens except the current one."""
+    user = create_user(db_session)
+    # Create two tokens for the same user
+    token1 = token_service.create_long_term_token(user_id=user.id, project_prefix="tet")
+    token2 = token_service.create_long_term_token(user_id=user.id, project_prefix="tet")
+
+    # Set the cookie to the second token (current session)
+    pyramid_request.cookies["refresh-token"] = token2
+
+    token_service.delete_other_tokens(user=user)
+
+    # token1 should be gone (deleted)
+    with pytest.raises(ValueError, match="Token not found"):
+        token_service.retrieve_and_validate_token(token=token1, prefix="tet")
+
+    # token2 should still be valid (current session token)
+    result = token_service.retrieve_and_validate_token(token=token2, prefix="tet")
+    assert result is not None
+
+
+# --- auth.py: cookie_attributes with no max_age ---
+
+
+def test_set_cookies_with_cookie_attributes_no_max_age(auth_service, pyramid_request):
+    """set_cookies should set default max_age when cookie_attributes has no max_age."""
+    from tet.security.config import CookieAttributes
+
+    attrs = CookieAttributes(name="refresh-token")
+    assert attrs.max_age is None
+
+    auth_service.set_cookies(cookie_attributes=attrs, refresh_token="test-token")
+
+    # max_age should be set to the default (expiration_mins * 60)
+    expected_max_age = auth_service.long_term_token_expiration_mins * 60
+    assert attrs.max_age == expected_max_age
+    assert attrs.value == "test-token"
+
+
+# --- config.py: AuthLoginResult.__bool__ ---
+
+
+def test_auth_login_result_bool():
+    """AuthLoginResult.__bool__ should return success value."""
+    from tet.security.config import AuthLoginResult
+
+    success_result = AuthLoginResult(user_id=1, success=True)
+    assert bool(success_result) is True
+
+    fail_result = AuthLoginResult(user_id=None, success=False)
+    assert bool(fail_result) is False
+
+
+# --- policy.py: forget() ---
+
+
+def test_policy_forget_returns_empty_list(pyramid_request):
+    """TokenAuthenticationPolicy.forget should return an empty list."""
+    from tet.security.policy import TokenAuthenticationPolicy
+
+    policy = TokenAuthenticationPolicy()
+    result = policy.forget(pyramid_request)
+    assert result == []
