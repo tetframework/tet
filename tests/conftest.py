@@ -116,7 +116,7 @@ def pyramid_config(db_engine):
         "sqlalchemy.url": DB_URL,
         "project_prefix": "tet",
         "pyramid.includes": ["pyramid_tm"],
-        "tet.security.authentication.secret": "secret",
+        "tet.security.authentication.secret": "test-jwt-secret-key-at-least-32-bytes",
     }
     with tetConfigurator() as config:
         config.add_settings(settings)

@@ -123,13 +123,20 @@ class AuthViews:
             dict: Result of the TOTP verification for the user.
         """
         user_id = self._require_authenticated_userid()
-
         payload = self.request.json_body
         token = payload["token"]
         setup_key = payload["setup_key"]
-        return self.multi_factor_auth_service.handle_totp_verify(
-            user_id=user_id, token=token, setup_key=setup_key
-        )
+        try:
+            return self.multi_factor_auth_service.handle_totp_verify(
+                user_id=user_id, token=token, setup_key=setup_key
+            )
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.exception(f"Error verifying MFA: {e}")
+            raise HTTPInternalServerError(
+                json_body={"message": "Failed to verify MFA"}
+            ) from e
 
     def refresh_token(self) -> tp.Union[tp.Dict[str, tp.Any], HTTPUnauthorized]:
         refresh_token = self.request.cookies.get(self.long_term_token_cookie_name)
@@ -148,13 +155,13 @@ class AuthViews:
 
     def change_password(self):
         user_id = None
-        data = self.request.json_body
-        payload = PasswordChangeData(
-            current_password=data["currentPassword"],
-            new_password=data["newPassword"],
-        )
         try:
             user_id = self._require_authenticated_userid()
+            data = self.request.json_body
+            payload = PasswordChangeData(
+                current_password=data["currentPassword"],
+                new_password=data["newPassword"],
+            )
             user = self.auth_service.get_current_user(user_id)
             is_valid = self.auth_service.change_password(payload=payload, user=user)
             self.token_service.delete_other_tokens(user=user)
@@ -249,7 +256,7 @@ class AuthViews:
                 security_events.AuthnMfaMethodDisabled(
                     request=self.request,
                     authenticated_userid=user_id,
-                    method=mfa_method_type.value if mfa_method_type else None,
+                    method=mfa_method_type.value,
                 )
             )
             return {"success": True}
@@ -258,7 +265,7 @@ class AuthViews:
                 security_events.AuthnMfaMethodDisableFail(
                     request=self.request,
                     authenticated_userid=user_id,
-                    method=mfa_method_type.value if mfa_method_type else None,
+                    method=mfa_method_type.value,
                 )
             )
             return e
@@ -268,7 +275,7 @@ class AuthViews:
                 security_events.AuthnMfaMethodDisableFail(
                     request=self.request,
                     authenticated_userid=user_id,
-                    method=mfa_method_type.value if mfa_method_type else None,
+                    method=mfa_method_type.value,
                 )
             )
             return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
