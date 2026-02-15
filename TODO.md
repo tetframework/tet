@@ -82,6 +82,8 @@
 ## Minor
 
 - Typo: "credientials" → "credentials" in `DEFAULT_UNAUTHORIZED_MESSAGE`
-- Magic numbers (token ID length `8`, hash prefix `[:5]`) should be named constants
+- Token ID byte length `8` (line 551/576) could be a named constant for clarity,
+  though it is internally consistent. The HIBP `[:5]` hash prefix is a fixed API
+  contract, not a magic number.
 - Document why `require_csrf=False` on all auth endpoints (stateless Bearer token auth)
 - Consider rate limiting guidance in docs (login, refresh, MFA endpoints)
