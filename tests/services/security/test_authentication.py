@@ -537,29 +537,9 @@ def test_logout_endpoint(pyramid_test_app, capture_token, pyramid_request, db_se
     assert response.json["success"] is True
 
 
-PASSWORD_CHANGE_EMAIL = "pwchange@invalid.invalid"
-PASSWORD_CHANGE_PASSWORD = "old_password_1234"
-
-
-def create_password_change_user(db_session: Session):
-    """Separate user for password change tests to avoid DB lock issues."""
-    user = db_session.query(User).filter(User.email == PASSWORD_CHANGE_EMAIL).one_or_none()
-    if user:
-        user.password = PASSWORD_CHANGE_PASSWORD
-        db_session.flush()
-        return user
-
-    user = User(email=PASSWORD_CHANGE_EMAIL, name="pwchange_user", is_admin=True)
-    user.password = PASSWORD_CHANGE_PASSWORD
-    db_session.add(user)
-    db_session.flush()
-    return user
-
-
 def test_change_password_endpoint(pyramid_test_app, capture_token, pyramid_request, db_session):
     """Change password via HTTP endpoint."""
-    create_password_change_user(db_session)
-    data = json.dumps({"user_identity": PASSWORD_CHANGE_EMAIL, "password": PASSWORD_CHANGE_PASSWORD})
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     login_resp = pyramid_test_app.post(
         LOGIN_ENDPOINT, params=data, content_type="application/json", status=200,
     )
@@ -573,7 +553,7 @@ def test_change_password_endpoint(pyramid_test_app, capture_token, pyramid_reque
         response = pyramid_test_app.post(
             "/api/v1/auth/users/me/password",
             params=json.dumps({
-                "currentPassword": PASSWORD_CHANGE_PASSWORD,
+                "currentPassword": "1234@abcd",
                 "newPassword": "new_secure_password_123",
             }),
             headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
@@ -585,8 +565,7 @@ def test_change_password_endpoint(pyramid_test_app, capture_token, pyramid_reque
 
 def test_change_password_endpoint_wrong_current(pyramid_test_app, capture_token, pyramid_request, db_session):
     """Change password with wrong current password should return 403."""
-    create_password_change_user(db_session)
-    data = json.dumps({"user_identity": PASSWORD_CHANGE_EMAIL, "password": PASSWORD_CHANGE_PASSWORD})
+    data = json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"})
     login_resp = pyramid_test_app.post(
         LOGIN_ENDPOINT, params=data, content_type="application/json", status=200,
     )
