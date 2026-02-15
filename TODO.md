@@ -7,8 +7,17 @@
 - JWT access tokens belong in `Authorization: Bearer` header only, never in cookies
 - Putting JWT in a cookie requires CSRF protection (currently disabled!) and defeats
   the purpose of bearer tokens
-- Only the **refresh token** belongs in a cookie (httpOnly, secure)
 - Remove `COOKIE_LOGIN_VIEW` and any views/config that wire up cookie-based JWT auth
+
+### Refresh token must be returned in the response body
+- Currently the refresh token is only set as a cookie
+- The login and refresh endpoints must also return the refresh token in the JSON
+  response body (alongside the access token), so non-browser clients (mobile apps,
+  CLI tools, other APIs) can store and manage it themselves
+- The cookie is one delivery mechanism, not the only one — the client decides
+  how to store the refresh token
+- The `/token/refresh` endpoint should accept the refresh token from the request
+  body as well, not only from cookies
 
 ### Fix cookie defaults
 - `CookieAttributes` must default to `httponly=True` and `secure=True`
