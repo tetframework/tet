@@ -245,10 +245,11 @@ class AuthViews:
 
     def disable_mfa_method(self):
         user_id = None
-        payload = self.request.json_body
-        mfa_method_type = MultiFactorAuthMethodType(payload["method_type"])
+        mfa_method_type = None
         try:
             user_id = self._require_authenticated_userid()
+            payload = self.request.json_body
+            mfa_method_type = MultiFactorAuthMethodType(payload["method_type"])
             self.multi_factor_auth_service.disable_method(
                 user_id=user_id, method_type=mfa_method_type
             )
@@ -265,7 +266,7 @@ class AuthViews:
                 security_events.AuthnMfaMethodDisableFail(
                     request=self.request,
                     authenticated_userid=user_id,
-                    method=mfa_method_type.value,
+                    method=mfa_method_type.value if mfa_method_type else None,
                 )
             )
             return e
@@ -275,16 +276,16 @@ class AuthViews:
                 security_events.AuthnMfaMethodDisableFail(
                     request=self.request,
                     authenticated_userid=user_id,
-                    method=mfa_method_type.value,
+                    method=mfa_method_type.value if mfa_method_type else None,
                 )
             )
             return HTTPForbidden(json_body={"message": "Failed to disable MFA method"})
 
     def revoke_other_tokens(self):
         user_id = None
-        payload = self.request.json_body
         try:
             user_id = self._require_authenticated_userid()
+            payload = self.request.json_body
             user = self.auth_service.get_current_user(user_id=user_id)
             if user is None:
                 raise HTTPUnauthorized(json_body={"message": "Unauthorized", "success": False})
