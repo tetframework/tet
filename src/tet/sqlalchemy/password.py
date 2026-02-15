@@ -33,7 +33,6 @@ Using the password property::
 
 import sqlalchemy as sa
 from sqlalchemy import orm as orm
-from sqlalchemy.ext import declarative
 
 from ..util.crypt import crypt, verify
 
@@ -67,7 +66,7 @@ class UserPasswordMixin:
 
         return verify(password, self._password)
 
-    @declarative.declared_attr
+    @orm.declared_attr
     def password(cls):
         """Password property that hashes on set and returns hash on get."""
         return orm.synonym(

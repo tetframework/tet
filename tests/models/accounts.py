@@ -3,7 +3,7 @@ from tet.sqlalchemy.password import UserPasswordMixin
 
 from sqlalchemy import Column, Integer, Text, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy import orm
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.schema import MetaData
 
 NAMING_CONVENTION = {
