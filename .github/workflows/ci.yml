@@ -37,7 +37,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -e '.[dev]'
+        run: |
+          pip install 'setuptools<82'
+          pip install -e '.[dev]'
       - name: Run tests with coverage
         run: |
           pytest --cov=tet --cov-report=term-missing --cov-report=xml:coverage.xml -v
