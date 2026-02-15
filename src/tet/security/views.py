@@ -242,8 +242,6 @@ class AuthViews:
         mfa_method_type = MultiFactorAuthMethodType(payload["method_type"])
         try:
             user_id = self._require_authenticated_userid()
-            if not mfa_method_type:
-                raise HTTPForbidden(json_body={"message": "Invalid MFA method type"})
             self.multi_factor_auth_service.disable_method(
                 user_id=user_id, method_type=mfa_method_type
             )
