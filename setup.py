@@ -18,7 +18,7 @@ dev_requires = ["pytest"]
 
 setup(
     name="tet",
-    version="0.4.3-dev",
+    version="0.5.0",
     description="Unearthly intelligent batteries-included application framework built on Pyramid",
     long_description=README + "\n\n" + CHANGES,
     long_description_content_type="text/markdown",

@@ -4,12 +4,18 @@ Dependency injection support for Tet applications.
 This module provides dependency injection via ``pyramid_di``. It is included
 automatically when using the ``services`` feature.
 
+The DI primitives (:func:`service`, :class:`RequestScopedBaseService`,
+:class:`ApplicationScopedBaseService`, :class:`BaseService`,
+:func:`autowired`) are re-exported here so application code can import
+them from a single, stable location -- ``tet.services`` -- rather than
+reaching into ``pyramid_di`` directly.
+
 Example
 -------
 
 Defining a service::
 
-    from pyramid_di import service, RequestScopedBaseService, autowired
+    from tet.services import service, RequestScopedBaseService, autowired
 
     @service()
     class UserService(RequestScopedBaseService):
@@ -36,7 +42,7 @@ Setup and scanning services::
 Using services in class-based views::
 
     from pyramid.view import view_config
-    from pyramid_di import autowired
+    from tet.services import autowired
     from myapp.services import UserService
 
     class UserViews:
@@ -60,6 +66,22 @@ Using services in function-based views::
         return user_service.get_user(request.matchdict["id"])
 """
 from pyramid.config import Configurator
+from pyramid_di import (  # noqa: F401
+    ApplicationScopedBaseService,
+    BaseService,
+    RequestScopedBaseService,
+    autowired,
+    service,
+)
+
+__all__ = [
+    "ApplicationScopedBaseService",
+    "BaseService",
+    "RequestScopedBaseService",
+    "autowired",
+    "includeme",
+    "service",
+]
 
 
 def includeme(config: Configurator) -> None:
