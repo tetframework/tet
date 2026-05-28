@@ -1,6 +1,15 @@
 # Changes
 
 
+2026-05-28  Antti Haapala  <antti.haapala@anttipatterns.com>
+
+    * 0.5.0: ``tet.services`` now re-exports ``service``,
+      ``RequestScopedBaseService``, ``ApplicationScopedBaseService``,
+      ``BaseService`` and ``autowired`` from ``pyramid_di``. Application
+      code should import these from ``tet.services`` rather than reaching
+      into ``pyramid_di`` directly.
+
+
 2025-01-28  Antti Haapala  <antti.haapala@anttipatterns.com>
 
     * Add Python 3.12, 3.13, 3.14 support. Drop Python 3.6, 3.7 support.
