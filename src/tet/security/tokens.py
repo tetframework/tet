@@ -1,5 +1,6 @@
 import dataclasses
 import hashlib
+import hmac
 import logging
 import secrets
 import typing as tp
@@ -98,7 +99,7 @@ class TetTokenService(RequestScopedBaseService):
         if not token_from_db:
             raise ValueError("Token not found")
 
-        if token_from_db.secret_hash != hashlib.sha256(secret).digest().hex():
+        if not hmac.compare_digest(token_from_db.secret_hash, hashlib.sha256(secret).digest().hex()):
             raise ValueError("Invalid token")
 
         if token_from_db.expires_at and token_from_db.expires_at < datetime.now(UTC):

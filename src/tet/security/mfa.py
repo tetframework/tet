@@ -121,7 +121,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             > 0
         )
 
-    def handle_totp_verify(self, *, user_id: tp.Any, token: tp.Any, setup_key: tp.Any) -> dict:
+    def handle_totp_verify(self, *, user_id: tp.Any, token: tp.Any) -> dict:
         try:
             totp_mfa_method = self.get_method(
                 user_id=user_id,
@@ -134,6 +134,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                     json_body={"message": "Two-factor authentication method not found."}
                 )
 
+            setup_key = totp_mfa_method.data.get("secret") if totp_mfa_method.data else None
             if not setup_key:
                 raise HTTPBadRequest(json_body={"message": "Missing TOTP secret."})
 
@@ -143,14 +144,8 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                 raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
 
             totp_mfa_method.mark_used()
-
-            data = TOTPData(
-                secret=setup_key,
-                issuer=self.project_prefix,
-            )
             totp_mfa_method.verified = True
             totp_mfa_method.is_active = True
-            totp_mfa_method.data = data.to_dict()
             return {"success": is_valid}
         except KeyError as e:
             logger.exception(f"details {str(e)}")
@@ -237,7 +232,9 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
                 is_active=False,
                 verified=False,
             )
-            if not existing_method:
+            if existing_method:
+                existing_method.data = data.to_dict()
+            else:
                 self.create_method(
                     method_type=MultiFactorAuthMethodType.TOTP,
                     user_id=user.id,

@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import logging
 import typing as tp
@@ -47,9 +48,11 @@ class TetAuthService(RequestScopedBaseService):
         **kwargs,
     ):
         if cookie_attributes:
-            cookie_attributes.value = refresh_token
-            if not cookie_attributes.max_age:
-                cookie_attributes.max_age = self.long_term_token_expiration_mins * 60
+            cookie_attributes = dataclasses.replace(
+                cookie_attributes,
+                value=refresh_token,
+                max_age=cookie_attributes.max_age or self.long_term_token_expiration_mins * 60,
+            )
 
         cookie_attrs = cookie_attributes or CookieAttributes(
             name=self.long_term_token_cookie_name,
@@ -84,7 +87,7 @@ class TetAuthService(RequestScopedBaseService):
         return self.token_service.create_short_term_jwt(user_id)
 
     def verify_password(self, user: tp.Any, password: str) -> bool:
-        return user.verify_password(password)
+        return user.validate_password(password)
 
     def is_password_breached(self, password: str) -> bool:
         sha1_hash = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()

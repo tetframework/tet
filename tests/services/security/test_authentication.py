@@ -787,7 +787,7 @@ def test_handle_totp_verify_success(mfa_service, db_session):
     valid_token = pyotp.TOTP(secret).now()
 
     result = mfa_service.handle_totp_verify(
-        user_id=user.id, token=valid_token, setup_key=secret,
+        user_id=user.id, token=valid_token,
     )
     assert result["success"] is True
 
@@ -813,7 +813,7 @@ def test_handle_totp_verify_invalid_token(mfa_service, db_session):
 
     with pytest.raises(HTTPForbidden):
         mfa_service.handle_totp_verify(
-            user_id=user.id, token="000000", setup_key=secret,
+            user_id=user.id, token="000000",
         )
 
 
@@ -824,22 +824,26 @@ def test_handle_totp_verify_no_method(mfa_service, db_session):
 
     with pytest.raises(HTTPForbidden):
         mfa_service.handle_totp_verify(
-            user_id=user.id, token="123456", setup_key="some_secret",
+            user_id=user.id, token="123456",
         )
 
 
-def test_handle_totp_verify_missing_setup_key(mfa_service, db_session):
-    """handle_totp_verify should raise HTTPBadRequest when setup_key is None."""
+def test_handle_totp_verify_missing_secret_in_db(mfa_service, db_session):
+    """handle_totp_verify should raise HTTPBadRequest when DB record has no secret."""
     user = create_user(db_session)
     _cleanup_mfa_methods(db_session, user.id)
     user.display_name = "Test User"
     db_session.flush()
 
-    mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    mfa_service.create_method(
+        method_type=MultiFactorAuthMethodType.TOTP,
+        user_id=user.id,
+        data={},
+    )
 
     with pytest.raises(HTTPBadRequest):
         mfa_service.handle_totp_verify(
-            user_id=user.id, token="123456", setup_key=None,
+            user_id=user.id, token="123456",
         )
 
 
@@ -971,7 +975,7 @@ def test_mfa_setup_and_verify_flow(pyramid_test_app, capture_token, pyramid_requ
     valid_token = pyotp.TOTP(secret).now()
     verify_resp = pyramid_test_app.post(
         "/api/v1/auth/mfa/app/verify",
-        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        params=json.dumps({"token": valid_token}),
         headers=auth_headers,
         content_type="application/json",
         status=200,
@@ -1002,7 +1006,7 @@ def test_mfa_get_methods_returns_active(pyramid_test_app, capture_token, pyramid
     valid_token = pyotp.TOTP(secret).now()
     pyramid_test_app.post(
         "/api/v1/auth/mfa/app/verify",
-        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        params=json.dumps({"token": valid_token}),
         headers=auth_headers,
         content_type="application/json",
         status=200,
@@ -1041,7 +1045,7 @@ def test_mfa_disable_method(pyramid_test_app, capture_token, pyramid_request, cl
     valid_token = pyotp.TOTP(secret).now()
     pyramid_test_app.post(
         "/api/v1/auth/mfa/app/verify",
-        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        params=json.dumps({"token": valid_token}),
         headers=auth_headers,
         content_type="application/json",
         status=200,
@@ -1090,7 +1094,7 @@ def test_login_with_totp_challenge(pyramid_test_app, capture_token, pyramid_requ
     valid_token = pyotp.TOTP(secret).now()
     pyramid_test_app.post(
         "/api/v1/auth/mfa/app/verify",
-        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        params=json.dumps({"token": valid_token}),
         headers=auth_headers,
         content_type="application/json",
         status=200,
@@ -1136,7 +1140,7 @@ def test_login_without_totp_returns_mfa_required(pyramid_test_app, capture_token
     valid_token = pyotp.TOTP(secret).now()
     pyramid_test_app.post(
         "/api/v1/auth/mfa/app/verify",
-        params=json.dumps({"token": valid_token, "setup_key": secret}),
+        params=json.dumps({"token": valid_token}),
         headers=auth_headers,
         content_type="application/json",
         status=200,
@@ -1174,7 +1178,7 @@ def test_handle_totp_verify_key_error(mfa_service, db_session):
     ):
         with pytest.raises(HTTPBadRequest):
             mfa_service.handle_totp_verify(
-                user_id=user.id, token="123456", setup_key="some_secret",
+                user_id=user.id, token="123456",
             )
 
 
@@ -1192,7 +1196,7 @@ def test_handle_totp_verify_generic_exception(mfa_service, db_session):
     ):
         with pytest.raises(HTTPInternalServerError):
             mfa_service.handle_totp_verify(
-                user_id=user.id, token="123456", setup_key="some_secret",
+                user_id=user.id, token="123456",
             )
 
 
@@ -1590,7 +1594,7 @@ def test_get_mfa_methods_http_exception(pyramid_test_app, capture_token, pyramid
 
 
 def test_generate_mfa_totp_non_totp_method(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
-    """generate_mfa_totp with non-TOTP method_type should return None (200)."""
+    """generate_mfa_totp with non-TOTP method_type should return 400."""
     login_resp = pyramid_test_app.post(
         LOGIN_ENDPOINT,
         params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
@@ -1604,9 +1608,10 @@ def test_generate_mfa_totp_non_totp_method(pyramid_test_app, capture_token, pyra
         params=json.dumps({"method_type": "hotp"}),
         headers={ACCESS_TOKEN_HEADER_NAME: f"Bearer {access_token}"},
         content_type="application/json",
-        status=200,
+        status=400,
+        expect_errors=True,
     )
-    assert response.json is None
+    assert response.status_code == 400
 
 
 def test_generate_mfa_totp_http_exception(pyramid_test_app, capture_token, pyramid_request, clean_mfa):
@@ -1681,10 +1686,16 @@ def test_set_cookies_with_cookie_attributes_no_max_age(auth_service, pyramid_req
 
     auth_service.set_cookies(cookie_attributes=attrs, refresh_token="test-token")
 
-    # max_age should be set to the default (expiration_mins * 60)
+    # Original attrs should be unchanged (dataclasses.replace creates a copy)
+    assert attrs.max_age is None
+    assert attrs.value is None
+
+    # The cookie should have been set on the response with the correct max_age
     expected_max_age = auth_service.long_term_token_expiration_mins * 60
-    assert attrs.max_age == expected_max_age
-    assert attrs.value == "test-token"
+    response_headers = pyramid_request.response.headerlist
+    set_cookie_headers = [v for k, v in response_headers if k == "Set-Cookie"]
+    assert any("test-token" in h for h in set_cookie_headers)
+    assert any(f"Max-Age={expected_max_age}" in h for h in set_cookie_headers)
 
 
 # --- config.py: AuthLoginResult.__bool__ ---

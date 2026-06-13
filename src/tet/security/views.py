@@ -68,8 +68,6 @@ class AuthViews:
         try:
             if user_id is None:
                 raise HTTPUnauthorized(json_body={"message": DEFAULT_UNAUTHORIZED_MESSAGE})
-            refresh_token = self.token_service.create_long_term_token(user_id=user_id, project_prefix=self.project_prefix)
-            access_token = self.token_service.create_short_term_jwt(user_id)
 
             if self.multi_factor_auth_service.is_totp_mfa_enabled(user_id):
                 if not totp_token:
@@ -77,8 +75,13 @@ class AuthViews:
                     return response_payload
 
                 return self.multi_factor_auth_service.handle_totp_challenge(
-                    user_id=user_id, totp_token=totp_token
+                    user_id=user_id,
+                    totp_token=totp_token,
+                    cookie_attributes=self.cookie_attributes,
                 )
+
+            refresh_token = self.token_service.create_long_term_token(user_id=user_id, project_prefix=self.project_prefix)
+            access_token = self.token_service.create_short_term_jwt(user_id)
 
             self.auth_service.set_cookies(
                 cookie_attributes=self.cookie_attributes,
@@ -125,10 +128,9 @@ class AuthViews:
         user_id = self._require_authenticated_userid()
         payload = self.request.json_body
         token = payload["token"]
-        setup_key = payload["setup_key"]
         try:
             return self.multi_factor_auth_service.handle_totp_verify(
-                user_id=user_id, token=token, setup_key=setup_key
+                user_id=user_id, token=token
             )
         except HTTPException as e:
             raise e
@@ -347,7 +349,7 @@ class AuthViews:
                 return self.multi_factor_auth_service.handle_totp_setup(
                     user=user, project_prefix=self.project_prefix
                 )
-            return None
+            raise HTTPBadRequest(json_body={"message": f"Unsupported MFA method type: {payload['method_type']}"})
         except HTTPException as e:
             raise e
         except Exception as e:
