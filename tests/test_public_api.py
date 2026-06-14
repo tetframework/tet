@@ -14,6 +14,26 @@ import pytest
 from pyramid.request import Request
 
 
+# ── tet.services ────────────────────────────────────────────────────
+
+def test_tet_services_exports():
+    from tet.services import (
+        ApplicationScopedBaseService,
+        BaseService,
+        RequestScopedBaseService,
+        autowired,
+        includeme,
+        service,
+    )
+
+    assert callable(service)
+    assert callable(autowired)
+    assert callable(includeme)
+    assert isinstance(RequestScopedBaseService, type)
+    assert isinstance(ApplicationScopedBaseService, type)
+    assert isinstance(BaseService, type)
+
+
 # ── tet.security (package) ──────────────────────────────────────────
 
 def test_tet_security_exports():
