@@ -15,8 +15,19 @@ API Reference
    tet.request
    tet.response
    tet.security
+   tet.security.auth
+   tet.security.authentication
    tet.security.authorization
+   tet.security.compat
+   tet.security.config
    tet.security.csrf
+   tet.security.events
+   tet.security.mfa
+   tet.security.models
+   tet.security.policy
+   tet.security.rate_limit
+   tet.security.tokens
+   tet.security.views
    tet.services
    tet.session
    tet.sqlalchemy

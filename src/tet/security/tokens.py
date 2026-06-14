@@ -36,6 +36,7 @@ class TetTokenService(RequestScopedBaseService):
     ) -> str:
         """
         Generates a long-term token for a user with a project-specific prefix and stores it in the database.
+
         Args:
             user_id: The ID of the user for whom the token is generated.
             project_prefix: A prefix indicating the project this token is for.

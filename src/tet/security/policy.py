@@ -57,6 +57,7 @@ class TokenAuthenticationPolicy(CallbackAuthenticationPolicy):
         """This method of the policy should return at least one principal
         in the list: the userid of the user (and usually 'system.Authenticated'
         as well).
+
         Returns:
            A sequence representing the groups that the current user is in
         """
