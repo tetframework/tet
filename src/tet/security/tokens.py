@@ -173,6 +173,15 @@ class TetTokenService(RequestScopedBaseService):
         ]
         self._delete_execution(condition)
 
+    def cleanup_expired_tokens(self) -> int:
+        """Delete all expired long-term tokens. Returns the number deleted."""
+        stmt = delete(self.long_term_token_model).where(
+            self.long_term_token_model.expires_at < datetime.now(UTC)
+        )
+        result = self.db_session.execute(stmt)
+        self.db_session.flush()
+        return result.rowcount
+
     def delete_token(self, *, user: tp.Any = None) -> None:
         current_token = self.retrieve_and_validate_token(
             token=self.request.cookies.get(self.long_term_token_cookie_name),

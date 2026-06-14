@@ -1,8 +1,9 @@
 import typing as tp
 
 from pyramid.config import Configurator
-from pyramid.security import NO_PERMISSION_REQUIRED
 from zope.interface import Interface
+
+from tet.security.compat import NO_PERMISSION_REQUIRED
 
 from tet.security.config import (
     AuthLoginResult,
@@ -22,15 +23,20 @@ from tet.security.config import (
     DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
     DEFAULT_REGISTERED_CLAIMS,
     DEFAULT_LOGIN_ATTR,
+    DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
 )
 from tet.security.models import (
     MultiFactorAuthenticationMethodMixin,
+    RateLimitAttemptMixin,
+    TOTPUsedCodeMixin,
     TokenMixin,
 )
 from tet.security.policy import TokenAuthenticationPolicy
 from tet.security.tokens import TetTokenService
 from tet.security.auth import TetAuthService
 from tet.security.mfa import TetMultiFactorAuthenticationService
+from tet.security.rate_limit import TetRateLimitService
 from tet.security.views import AuthViews
 
 __all__ = [
@@ -45,10 +51,14 @@ __all__ = [
     "PasswordChangeData",
     "TetAuthService",
     "TetMultiFactorAuthenticationService",
+    "TetRateLimitService",
     "TetTokenService",
     "TOTPData",
+    "TOTPUsedCodeMixin",
     "TokenAuthenticationPolicy",
     "TokenMixin",
+    "RateLimitAttemptMixin",
+    "NO_PERMISSION_REQUIRED",
 ]
 
 DEFAULT_SECURITY_POLICY = TokenAuthenticationPolicy()
@@ -73,6 +83,10 @@ def set_token_authentication(
     jwt_claims: JWTRegisteredClaims = DEFAULT_REGISTERED_CLAIMS,
     cookie_attributes: tp.Optional[CookieAttributes] = None,
     security_policy: tp.Optional[type["TokenAuthenticationPolicy"]] = DEFAULT_SECURITY_POLICY,
+    totp_used_code_model: tp.Any = None,
+    rate_limit_model: tp.Any = None,
+    login_rate_limit_max_attempts: int = DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    login_rate_limit_window_seconds: int = DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
 ) -> None:
     """
     Configure token-based authentication for a Pyramid application (with conflict detection).
@@ -95,6 +109,10 @@ def set_token_authentication(
         jwt_claims: Default JWT registered claims to include in the token payload.
         cookie_attributes: Optional cookie attributes for refresh token cookies.
         security_policy: A security policy instance to use for token authentication.
+        totp_used_code_model: Optional model for TOTP replay protection (UNLOGGED table).
+        rate_limit_model: Optional model for rate limiting (UNLOGGED table).
+        login_rate_limit_max_attempts: Max login attempts per IP within the window (default: 10).
+        login_rate_limit_window_seconds: Rate limit window in seconds (default: 300).
     """
 
     def register():
@@ -115,6 +133,11 @@ def set_token_authentication(
         config.registry.tet_auth_jwt_expiration_mins = jwt_token_expiration_mins
         config.registry.tet_auth_long_term_token_expiration_mins = long_term_token_expiration_mins
         config.registry.tet_auth_security_policy = security_policy
+
+        config.registry.tet_auth_totp_used_code_model = totp_used_code_model
+        config.registry.tet_auth_rate_limit_model = rate_limit_model
+        config.registry.tet_auth_login_rate_limit_max_attempts = login_rate_limit_max_attempts
+        config.registry.tet_auth_login_rate_limit_window_seconds = login_rate_limit_window_seconds
 
     config.action(discriminator="set_token_authentication", callable=register)
 
@@ -227,6 +250,11 @@ def includeme(config: Configurator):
     config.register_service_factory(
         lambda ctx, req: TetAuthService(request=req),
         TetAuthService,
+        Interface,
+    )
+    config.register_service_factory(
+        lambda ctx, req: TetRateLimitService(request=req),
+        TetRateLimitService,
         Interface,
     )
 

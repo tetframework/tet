@@ -1,4 +1,9 @@
-from tet.security.authentication import TokenMixin, MultiFactorAuthenticationMethodMixin
+from tet.security.authentication import (
+    TokenMixin,
+    MultiFactorAuthenticationMethodMixin,
+    TOTPUsedCodeMixin,
+    RateLimitAttemptMixin,
+)
 from tet.sqlalchemy.password import UserPasswordMixin
 
 from sqlalchemy import Column, Integer, Text, Boolean, ForeignKey, UniqueConstraint
@@ -44,4 +49,18 @@ class MultiFactorAuthenticationMethod(MultiFactorAuthenticationMethodMixin, Base
     )
 
 
-__all__ = ["User", "Token", "Base", "metadata"]
+class TOTPUsedCode(TOTPUsedCodeMixin, Base):
+    __tablename__ = "totp_used_code"
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("user_id", "time_step", name="uq_totp_used_code_user_time_step"),
+        {"prefixes": ["UNLOGGED"]},
+    )
+
+
+class RateLimitAttempt(RateLimitAttemptMixin, Base):
+    __tablename__ = "rate_limit_attempt"
+    __table_args__ = {"prefixes": ["UNLOGGED"]}
+
+
+__all__ = ["User", "Token", "Base", "metadata", "TOTPUsedCode", "RateLimitAttempt"]

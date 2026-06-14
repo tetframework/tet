@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Enum, Boolean
+from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Enum, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 
 from tet.security.config import MultiFactorAuthMethodType, UTC
@@ -35,6 +35,35 @@ class MultiFactorAuthenticationMethodMixin:
 
     def mark_used(self):
         self.last_used_at = datetime.now(UTC)
+
+
+class TOTPUsedCodeMixin:
+    """
+    Tracks used TOTP time steps to prevent replay attacks.
+
+    The consuming application must add a ``user_id`` foreign key column and
+    a unique constraint on ``(user_id, time_step)``.  The table should be
+    created as ``UNLOGGED`` for performance (``__table_args__ = {'prefixes': ['UNLOGGED']}``).
+    """
+
+    __tablename__ = "totp_used_code"
+    id = Column(Integer, primary_key=True)
+    time_step = Column(BigInteger, nullable=False)
+    used_at = Column(DateTime(True), default=lambda: datetime.now(UTC))
+
+
+class RateLimitAttemptMixin:
+    """
+    Records individual rate-limited attempts keyed by an arbitrary string.
+
+    The table should be created as ``UNLOGGED``
+    (``__table_args__ = {'prefixes': ['UNLOGGED']}``).
+    """
+
+    __tablename__ = "rate_limit_attempt"
+    id = Column(Integer, primary_key=True)
+    key = Column(String, nullable=False, index=True)
+    attempted_at = Column(DateTime(True), default=lambda: datetime.now(UTC), nullable=False)
 
 
 class TokenMixin:

@@ -5,12 +5,19 @@ import typing as tp
 import pytest
 from pyramid.request import Request
 from pyramid.response import Response
-from pyramid.authorization import Allow, Authenticated, Everyone, Deny
+from tet.security.compat import Allow, Authenticated, Everyone, Deny
 from pyramid.testing import setUp, tearDown
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from tests.models.accounts import Base, Token, User, MultiFactorAuthenticationMethod
+from tests.models.accounts import (
+    Base,
+    Token,
+    User,
+    MultiFactorAuthenticationMethod,
+    TOTPUsedCode,
+    RateLimitAttempt,
+)
 from tet.config import Configurator as tetConfigurator
 from tet.security.authentication import (
     TokenAuthenticationPolicy,
@@ -41,6 +48,9 @@ def db_engine(database):
     engine = create_engine(DB_URL)
     Base.metadata.create_all(engine)
     yield engine
+    with engine.begin() as conn:
+        conn.execute(RateLimitAttempt.__table__.delete())
+        conn.execute(TOTPUsedCode.__table__.delete())
     engine.dispose()
 
 
@@ -147,6 +157,8 @@ def pyramid_app(pyramid_config):
         security_policy=TokenAuthenticationPolicy(),
         user_model=User,
         multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
+        totp_used_code_model=TOTPUsedCode,
+        rate_limit_model=RateLimitAttempt,
     )
     pyramid_config.add_route("home", "/")
     pyramid_config.add_view(
@@ -178,6 +190,8 @@ def pyramid_event_app(pyramid_config):
         security_policy=TokenAuthenticationPolicy(),
         user_model=User,
         multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
+        totp_used_code_model=TOTPUsedCode,
+        rate_limit_model=RateLimitAttempt,
     )
     pyramid_config.add_route("home", "/")
     pyramid_config.add_view(

@@ -1722,3 +1722,160 @@ def test_policy_forget_returns_empty_list(pyramid_request):
     policy = TokenAuthenticationPolicy()
     result = policy.forget(pyramid_request)
     assert result == []
+
+
+# --- TOTP replay protection ---
+
+
+def test_totp_replay_protection_blocks_reuse(mfa_service, db_session, pyramid_request):
+    """Using the same TOTP code twice should raise HTTPForbidden on the second attempt."""
+    user = create_user(db_session)
+    _cleanup_mfa_methods(db_session, user.id)
+    user.display_name = "Test User"
+    db_session.flush()
+
+    mfa_service.handle_totp_setup(user=user, project_prefix="tet")
+    totp_mfa_method = mfa_service.get_method(
+        user_id=user.id,
+        method_type=MultiFactorAuthMethodType.TOTP,
+        is_active=False,
+        verified=False,
+    )
+    secret = totp_mfa_method.data["secret"]
+    token = pyotp.TOTP(secret).now()
+
+    # Verify and activate
+    mfa_service.handle_totp_verify(user_id=user.id, token=token)
+
+    # Set json_body on the request (needed by event notification in handle_totp_challenge)
+    pyramid_request.json_body = {"user_identity": user.email}
+
+    # Login with TOTP — first attempt succeeds
+    from tet.security.config import CookieAttributes
+
+    valid_token = pyotp.TOTP(secret).now()
+    result = mfa_service.handle_totp_challenge(
+        user_id=user.id,
+        totp_token=valid_token,
+        cookie_attributes=CookieAttributes(name="refresh-token"),
+    )
+    assert result["success"] is True
+
+    # Same code again — should be blocked (replay or verification failure)
+    with pytest.raises(HTTPForbidden):
+        mfa_service.handle_totp_challenge(
+            user_id=user.id,
+            totp_token=valid_token,
+            cookie_attributes=CookieAttributes(name="refresh-token"),
+        )
+
+
+def test_totp_replay_check_and_record(mfa_service, db_session):
+    """_check_totp_replay + _record_totp_use should block the same time step."""
+    user = create_user(db_session)
+    time_step = 99999999
+
+    # First use — should not raise
+    mfa_service._check_totp_replay(user.id, time_step)
+    mfa_service._record_totp_use(user.id, time_step)
+    db_session.flush()
+
+    # Second use — same time step — should raise
+    with pytest.raises(HTTPForbidden):
+        mfa_service._check_totp_replay(user.id, time_step)
+
+
+def test_totp_replay_cleanup(mfa_service, db_session):
+    """cleanup_used_codes should delete old entries."""
+    from tests.models.accounts import TOTPUsedCode
+
+    user = create_user(db_session)
+    used = TOTPUsedCode()
+    used.user_id = user.id
+    used.time_step = 1
+    used.used_at = datetime.now(timezone.utc) - timedelta(seconds=300)
+    db_session.add(used)
+    db_session.flush()
+
+    count = mfa_service.cleanup_used_codes(older_than_seconds=120)
+    assert count == 1
+
+
+# --- Rate limiting ---
+
+
+def test_rate_limit_blocks_excessive_login(pyramid_test_app, capture_token, pyramid_request):
+    """Login should return 429 after exceeding rate limit."""
+    # Set a very low rate limit for testing
+    pyramid_request.registry.tet_auth_login_rate_limit_max_attempts = 2
+    pyramid_request.registry.tet_auth_login_rate_limit_window_seconds = 60
+
+    for _ in range(2):
+        pyramid_test_app.post(
+            LOGIN_ENDPOINT,
+            params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+            content_type="application/json",
+            status=200,
+        )
+
+    response = pyramid_test_app.post(
+        LOGIN_ENDPOINT,
+        params=json.dumps({"user_identity": "exampple2@invalid.invalid", "password": "1234@abcd"}),
+        content_type="application/json",
+        status=429,
+        expect_errors=True,
+    )
+    assert response.status_code == 429
+
+
+def test_rate_limit_service_disabled(pyramid_request):
+    """Rate limit service with no model should always return False."""
+    from tet.security.rate_limit import TetRateLimitService
+
+    service = TetRateLimitService(request=pyramid_request)
+    original = service.rate_limit_model
+    service.rate_limit_model = None
+    assert service.check_rate_limit("test", 1, 60) is False
+    assert service.cleanup() == 0
+    service.rate_limit_model = original
+
+
+def test_rate_limit_cleanup(pyramid_request, db_session):
+    """cleanup should delete old rate limit entries."""
+    from tet.security.rate_limit import TetRateLimitService
+    from tests.models.accounts import RateLimitAttempt
+
+    service = TetRateLimitService(request=pyramid_request)
+
+    engine = db_session.get_bind()
+    table = RateLimitAttempt.__table__
+    old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    with engine.begin() as conn:
+        conn.execute(table.insert().values(key="old_key", attempted_at=old_time))
+
+    deleted = service.cleanup(older_than_seconds=3600)
+    assert deleted >= 1
+
+
+# --- Token cleanup ---
+
+
+def test_cleanup_expired_tokens(token_service, db_session):
+    """cleanup_expired_tokens should delete expired tokens and leave valid ones."""
+    user = create_user(db_session)
+    expired_time = datetime.now(timezone.utc) - timedelta(hours=1)
+    valid_time = datetime.now(timezone.utc) + timedelta(hours=12)
+
+    token_service.create_long_term_token(
+        user_id=user.id, project_prefix="tet", expire_timestamp=expired_time
+    )
+    valid_token = token_service.create_long_term_token(
+        user_id=user.id, project_prefix="tet", expire_timestamp=valid_time
+    )
+
+    deleted = token_service.cleanup_expired_tokens()
+    assert deleted >= 1
+
+    # Valid token should still work
+    result = token_service.retrieve_and_validate_token(token=valid_token, prefix="tet")
+    assert result is not None

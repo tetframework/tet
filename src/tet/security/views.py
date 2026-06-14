@@ -7,6 +7,7 @@ from pyramid.httpexceptions import (
     HTTPBadRequest,
     HTTPException,
     HTTPInternalServerError,
+    HTTPTooManyRequests,
 )
 from pyramid.request import Request
 from pyramid.response import Response
@@ -25,6 +26,7 @@ from tet.security.config import (
 from tet.security.tokens import TetTokenService
 from tet.security.auth import TetAuthService
 from tet.security.mfa import TetMultiFactorAuthenticationService
+from tet.security.rate_limit import TetRateLimitService
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ class AuthViews:
     multi_factor_auth_service: TetMultiFactorAuthenticationService = autowired(
         TetMultiFactorAuthenticationService
     )
+    rate_limit_service: TetRateLimitService = autowired(TetRateLimitService)
     db_session: Session = autowired(Session)
 
     def __init__(self, request: Request):
@@ -59,6 +62,19 @@ class AuthViews:
         return user_id
 
     def login(self) -> dict[str, tp.Any]:
+        client_addr = self.request.client_addr or "unknown"
+        rate_limit_key = f"login:{client_addr}"
+        max_attempts = getattr(
+            self.registry, "tet_auth_login_rate_limit_max_attempts", 10
+        )
+        window = getattr(
+            self.registry, "tet_auth_login_rate_limit_window_seconds", 300
+        )
+        if self.rate_limit_service.check_rate_limit(rate_limit_key, max_attempts, window):
+            raise HTTPTooManyRequests(
+                json_body={"message": "Too many login attempts. Please try again later."}
+            )
+
         auth_result: AuthLoginResult = self.login_callback(self.request)
         user_id = auth_result.user_id
         user_identity = auth_result.user_identity

@@ -1,7 +1,9 @@
 import base64
 import io
 import logging
+import time
 import typing as tp
+from datetime import datetime, timedelta
 
 import pyotp
 import qrcode
@@ -21,6 +23,7 @@ from tet.security.config import (
     CookieAttributes,
     TOTPData,
     MultiFactorAuthMethodType,
+    UTC,
 )
 from tet.security.tokens import TetTokenService
 from tet.security.auth import TetAuthService
@@ -37,6 +40,9 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         super().__init__(request=request)
         self.tet_multi_factor_auth_method_model: tp.Any = (
             self.registry.tet_multi_factor_auth_method_model
+        )
+        self.totp_used_code_model: tp.Any = getattr(
+            self.registry, "tet_auth_totp_used_code_model", None
         )
         self.project_prefix: str = self.registry.tet_auth_project_prefix
         self.long_term_token_cookie_name = self.registry.tet_auth_long_term_token_cookie_name
@@ -78,6 +84,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         method_type: MultiFactorAuthMethodType,
         is_active: bool = True,
         verified: bool = True,
+        for_update: bool = False,
     ):
         """
         Retrieve a multifactor authentication method for a user.
@@ -90,11 +97,13 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             conditions.append(self.tet_multi_factor_auth_method_model.is_active == is_active)
         if verified:
             conditions.append(self.tet_multi_factor_auth_method_model.verified == verified)
-        return (
+        query = (
             self.session.query(self.tet_multi_factor_auth_method_model)
             .filter(*conditions)
-            .one_or_none()
         )
+        if for_update:
+            query = query.with_for_update()
+        return query.one_or_none()
 
     def get_active_methods_by_user_id(self, *, user_id: tp.Any):
         """
@@ -156,6 +165,43 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
             logger.exception(f"details {str(e)}")
             raise HTTPInternalServerError(json_body={"message": "TOTP verification failed."}) from e
 
+    def _check_totp_replay(self, user_id: tp.Any, time_step: int) -> None:
+        if not self.totp_used_code_model:
+            return
+        existing = (
+            self.session.query(self.totp_used_code_model)
+            .filter(
+                self.totp_used_code_model.user_id == user_id,
+                self.totp_used_code_model.time_step == time_step,
+            )
+            .one_or_none()
+        )
+        if existing:
+            raise HTTPForbidden(
+                json_body={"message": "TOTP code already used."}
+            )
+
+    def _record_totp_use(self, user_id: tp.Any, time_step: int) -> None:
+        if not self.totp_used_code_model:
+            return
+        used = self.totp_used_code_model()
+        used.user_id = user_id
+        used.time_step = time_step
+        self.session.add(used)
+        self.session.flush()
+
+    def cleanup_used_codes(self, older_than_seconds: int = 120) -> int:
+        if not self.totp_used_code_model:
+            return 0
+        cutoff = datetime.now(UTC) - timedelta(seconds=older_than_seconds)
+        count = (
+            self.session.query(self.totp_used_code_model)
+            .filter(self.totp_used_code_model.used_at < cutoff)
+            .delete()
+        )
+        self.session.flush()
+        return count
+
     def handle_totp_challenge(
         self,
         *,
@@ -163,11 +209,13 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         totp_token: str = None,
         cookie_attributes: CookieAttributes = None,
     ) -> dict[str, tp.Any]:
+        replay_protection = self.totp_used_code_model is not None
         totp_mfa_method = self.get_method(
             user_id=user_id,
             method_type=MultiFactorAuthMethodType.TOTP,
             is_active=True,
             verified=True,
+            for_update=replay_protection,
         )
         if not totp_mfa_method:
             raise HTTPForbidden(
@@ -183,6 +231,10 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
 
         if not is_valid:
             raise HTTPForbidden(json_body={"message": "Two-factor authentication failed."})
+
+        current_time_step = int(time.time()) // 30
+        self._check_totp_replay(user_id, current_time_step)
+        self._record_totp_use(user_id, current_time_step)
 
         totp_mfa_method.mark_used()
 

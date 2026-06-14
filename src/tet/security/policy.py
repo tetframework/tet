@@ -1,11 +1,11 @@
 import typing as tp
 
 from pyramid.authentication import CallbackAuthenticationPolicy
-from pyramid.authorization import ACLHelper
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import Request
-from pyramid.authorization import Everyone, Authenticated
 from zope.interface import implementer
+
+from tet.security.compat import ACLHelper, Everyone, Authenticated
 
 
 @implementer(ISecurityPolicy)

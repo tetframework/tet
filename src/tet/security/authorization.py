@@ -47,7 +47,29 @@ from pyramid.interfaces import IAuthorizationPolicy
 from pyramid.threadlocal import get_current_request
 from zope.interface import Interface, implementer
 
-__all__ = ["INewAuthorizationPolicy"]
+from tet.security.compat import (  # noqa: F401 — re-exported
+    ACLHelper,
+    Allow,
+    Allowed,
+    Authenticated,
+    Denied,
+    Deny,
+    Everyone,
+    NO_PERMISSION_REQUIRED,
+)
+
+__all__ = [
+    "ACLHelper",
+    "Allow",
+    "Allowed",
+    "Authenticated",
+    "AuthorizationPolicyWrapper",
+    "Denied",
+    "Deny",
+    "Everyone",
+    "INewAuthorizationPolicy",
+    "NO_PERMISSION_REQUIRED",
+]
 
 
 class INewAuthorizationPolicy(Interface):
