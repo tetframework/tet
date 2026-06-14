@@ -1,6 +1,35 @@
-import os
+"""
+PShell snippet utilities for interactive debugging.
+
+This module provides utilities for running Python snippets in the
+Pyramid pshell environment. Snippets are Python files with a ``run()``
+function that can be executed interactively.
+
+Example
+-------
+
+Configure snippets path in your INI file::
+
+    [app:main]
+    tet.snippets = %(here)s/snippets
+
+Create a snippet file ``snippets/create_user.py``::
+
+    def run(username, email):
+        from myapp.models import User
+        session = env["request"].dbsession
+        user = User(username=username, email=email)
+        session.add(user)
+        return user
+
+Use in pshell::
+
+    >>> snippets.create_user("john", "john@example.com")
+    <User: john>
+"""
 import glob
 import inspect
+import os
 
 
 class SnippetAccess(object):
