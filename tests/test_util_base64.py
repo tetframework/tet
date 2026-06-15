@@ -31,17 +31,22 @@ class TestBase64:
         test_string = "test123"
         assert Base64.normalize(test_string) == test_string
 
-    def test_generate_characters(self):
-        """Test generating random base64 characters."""
-        # Note: There's a bug in the implementation - chars[i] returns int not bytes
-        # This test documents the current (broken) behavior
-        with pytest.raises(TypeError):
-            Base64.generate_characters(16)
+    # Lengths around 3/4-byte group boundaries to catch padding leaking in.
+    @pytest.mark.parametrize("length", [0, 1, 2, 3, 4, 5, 15, 16, 17, 100])
+    def test_generate_characters(self, length):
+        """Generated string has the exact length and only alphabet chars."""
+        result = Base64.generate_characters(length)
+        assert isinstance(result, str)
+        assert len(result) == length
+        allowed = set(Base64.chars.decode())
+        assert set(result) <= allowed  # no '=' padding, only alphabet
 
     def test_generate_characters_different(self):
         """Test that generated characters are random."""
-        # This test is skipped due to bug in generate_characters
-        pytest.skip("generate_characters has a bug with bytes handling")
+        # Two long random strings should virtually never collide.
+        first = Base64.generate_characters(32)
+        second = Base64.generate_characters(32)
+        assert first != second
 
     def test_empty_encode_decode(self):
         """Test encoding/decoding empty bytes."""
@@ -109,12 +114,13 @@ class TestCrockfordBase32:
             variant = encoded.replace("1", "I")
             assert CrockfordBase32.decode(variant) == b"test"
 
-    def test_generate_characters(self):
-        """Test generating random Crockford Base32 characters."""
-        # Note: CrockfordBase32.chars is a string but generate_characters expects bytes
-        # This will fail with TypeError
-        with pytest.raises(TypeError):
-            CrockfordBase32.generate_characters(20)
+    @pytest.mark.parametrize("length", [0, 1, 2, 7, 8, 9, 20, 100])
+    def test_generate_characters(self, length):
+        """Generated string has the exact length and only alphabet chars."""
+        result = CrockfordBase32.generate_characters(length)
+        assert isinstance(result, str)
+        assert len(result) == length
+        assert set(result) <= set(CrockfordBase32.chars)
 
     def test_chars_attribute(self):
         """Test the chars attribute contains correct Crockford alphabet."""
