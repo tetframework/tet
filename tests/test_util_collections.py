@@ -1,6 +1,7 @@
 """
 Tests for tet.util.collections module - Collection utilities.
 """
+
 from tet.util.collections import flatten
 
 
@@ -79,7 +80,7 @@ class TestFlatten:
             (8, 9),
             [b"bytes", ["nested", "strings"]],
             [[[[[10]]]]],
-            []
+            [],
         ]
         result = list(flatten(input_data))
         expected = [1, 2, "three", 4, 5, 6, 7, 8, 9, b"bytes", "nested", "strings", 10]
@@ -117,11 +118,13 @@ class TestFlatten:
     def test_flatten_is_generator(self):
         """Test that flatten returns a generator."""
         import types
+
         result = flatten([1, [2, 3]])
         assert isinstance(result, types.GeneratorType)
 
     def test_flatten_lazy_evaluation(self):
         """Test that flatten uses lazy evaluation."""
+
         def gen_with_side_effect():
             yield 1
             yield [2, 3]

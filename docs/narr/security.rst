@@ -23,7 +23,7 @@ To enable CSRF protection in your application:
             config.include('tet.security.csrf')
             # CSRF protection is now enabled by default
             # with require_csrf=True
-            
+
             return config.make_wsgi_app()
 
 This automatically sets ``require_csrf=True`` as the default CSRF option, meaning all form submissions and state-changing requests will require CSRF tokens.
@@ -73,7 +73,7 @@ Traditional Pyramid authorization policies receive limited context. Tet's ``INew
             if request.path.startswith('/admin/'):
                 return 'admin' in principals
             return True
-            
+
         def principals_allowed_by_permission(self, request, context, permission):
             # Implementation depends on your authorization logic
             return {'admin', 'user'}
@@ -92,7 +92,7 @@ Register your authorization policy with Tet:
         with Configurator() as config:
             config.include('tet.security.authorization')
             config.set_authorization_policy(MyAuthorizationPolicy())
-            
+
             return config.make_wsgi_app()
 
 The authorization wrapper automatically adapts your ``INewAuthorizationPolicy`` to work with Pyramid's authorization system.
@@ -130,7 +130,7 @@ Exception Handling
 The root factory automatically converts these SQL exceptions to ``KeyError``:
 
 * ``NoResultFound``: When a query returns no results
-* ``MultipleResultsFound``: When a unique query returns multiple results  
+* ``MultipleResultsFound``: When a unique query returns multiple results
 * ``DataError``: When there are data-related SQL errors (e.g., invalid UUID format)
 
 This prevents SQL errors from leaking to users and provides appropriate HTTP error responses.
@@ -151,14 +151,14 @@ Use Tet's JSON utilities to prevent XSS when embedding JSON in HTML:
 
     # Safe for embedding in HTML/JavaScript
     safe_json = js_safe_dumps(user_data)
-    
+
     # In your template:
     # <script>var userData = ${safe_json|n};</script>
 
 The ``js_safe_dumps`` function escapes dangerous characters:
 
 * ``<`` → ``\\u003c``
-* ``>`` → ``\\u003e`` 
+* ``>`` → ``\\u003e``
 * ``/`` → ``\\u002f``
 * ``&`` → ``\\u0026``
 * ``\u2028`` → ``\\u2028`` (Line separator)

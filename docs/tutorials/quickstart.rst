@@ -47,7 +47,7 @@ Create a new directory for your project and add the following files:
         # Add routes
         config.add_route('home', '/')
         config.add_route('api', '/api')
-        
+
         # Add views
         config.add_view(hello_world, route_name='home')
         config.add_view(json_api, route_name='api', renderer='json')
@@ -83,12 +83,12 @@ Let's enhance our application with database support using SQLAlchemy.
 
     class User(Base):
         __tablename__ = 'users'
-        
+
         id = Column(Integer, primary_key=True)
         name = Column(String(50), nullable=False)
         email = Column(String(100), unique=True, nullable=False)
         created = Column(DateTime, default=datetime.utcnow)
-        
+
         def __json__(self, request):
             """JSON serialization for Tet's JSON renderer."""
             return {
@@ -118,14 +118,14 @@ Let's enhance our application with database support using SQLAlchemy.
 
     class UserViews:
         """User management views."""
-        
+
         # Database session automatically injected via pyramid_di
         dbsession: Session = autowired()
-        
+
         def create_user(self, request):
             # Use the autowired database session
             # Transaction managed automatically by pyramid_tm
-            
+
             # Create a new user
             user = User(
                 name='John Doe',
@@ -133,7 +133,7 @@ Let's enhance our application with database support using SQLAlchemy.
             )
             self.dbsession.add(user)
             # No need to commit - pyramid_tm handles transactions automatically
-            
+
             return {'message': 'User created', 'user': user}
 
         def list_users(self, request):
@@ -147,18 +147,18 @@ Let's enhance our application with database support using SQLAlchemy.
         # Setup SQLAlchemy with automatic session management
         config.include('tet.sqlalchemy.simple')
         config.setup_sqlalchemy()
-        
+
         # Routes
         config.add_route('home', '/')
         config.add_route('create_user', '/users/create')
         config.add_route('list_users', '/users')
-        
+
         # Views
         config.add_view(hello_world, route_name='home')
-        
+
         # Register class-based views
         user_views = UserViews()
-        config.add_view(user_views.create_user, route_name='create_user', 
+        config.add_view(user_views.create_user, route_name='create_user',
                       request_method='POST', renderer='json')
         config.add_view(user_views.list_users, route_name='list_users', renderer='json')
 
@@ -184,27 +184,27 @@ Let's add some security features to our application.
     def secure_create_user(request):
         # CSRF protection is automatically enabled
         # This view will require CSRF token for POST requests
-        
+
         try:
             # Validate CSRF token (optional explicit check)
             check_csrf_token(request)
         except HTTPForbidden:
             return {'error': 'CSRF token missing or invalid'}
-        
+
         session = request.find_service(name='dbsession')
-        
+
         # Get data from request
         name = request.json_body.get('name')
         email = request.json_body.get('email')
-        
+
         if not name or not email:
             return {'error': 'Name and email are required'}
-        
+
         # Create user
         user = User(name=name, email=email)
         session.add(user)
         session.commit()
-        
+
         return {'message': 'User created successfully', 'user': user}
 
 **Safe JSON for Frontend**
@@ -224,11 +224,11 @@ Create a template that safely embeds JSON:
     <body>
         <h1>Users</h1>
         <div id="users"></div>
-        
+
         <script>
             // Safe JSON embedding using Tet's js_safe_dumps
             var users = ${users_json|n};
-            
+
             // Display users
             var container = document.getElementById('users');
             users.forEach(function(user) {
@@ -249,13 +249,13 @@ Create a template that safely embeds JSON:
     def users_page(request):
         session = request.find_service(name='dbsession')
         users = session.query(User).all()
-        
+
         # Convert users to JSON-serializable format
         users_data = [user.__json__(request) for user in users]
-        
+
         # Safe JSON for template embedding
         users_json = js_safe_dumps(users_data)
-        
+
         return {'users_json': users_json}
 
 Adding Testing
@@ -284,7 +284,7 @@ Let's add some tests for our application.
 
     def test_create_user(dbsession):
         from app import create_user
-        
+
         # Mock request with database session
         request = DummyRequest()
         request.find_service = lambda name: dbsession
@@ -292,29 +292,29 @@ Let's add some tests for our application.
             'name': 'Test User',
             'email': 'test@example.com'
         }
-        
+
         # Test the view
         result = create_user(request)
-        
+
         assert result['message'] == 'User created'
         assert result['user'].name == 'Test User'
 
     def test_list_users(dbsession):
         from app import list_users
-        
+
         # Create test data
         user1 = User(name='User 1', email='user1@example.com')
         user2 = User(name='User 2', email='user2@example.com')
         dbsession.add_all([user1, user2])
         dbsession.commit()
-        
+
         # Mock request
         request = DummyRequest()
         request.find_service = lambda name: dbsession
-        
+
         # Test the view
         result = list_users(request)
-        
+
         assert len(result['users']) == 2
 
 Run the tests::
@@ -335,16 +335,16 @@ For production deployment, create a proper configuration file.
 
     # Database configuration
     sqlalchemy.url = postgresql://user:pass@localhost/myapp
-    
+
     # Session configuration
     session.secret = your-very-secure-secret-key-here
     session.secure = true
     session.httponly = true
     session.samesite = Strict
-    
+
     # Security settings
     csrf.secret = another-secure-secret-for-csrf
-    
+
     # Logging
     [loggers]
     keys = root, myapp

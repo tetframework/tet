@@ -1,20 +1,65 @@
+"""
+View utilities and base classes for Tet applications.
+
+This module provides view-related utilities including:
+
+- :class:`view_config` - Extended Pyramid view configuration decorator
+- :class:`expose` - Decorator for exposing controller methods as views
+- :class:`BaseController` - Base class for traversal-based controllers
+- :class:`ServiceViews` - Base class for service-based view classes
+
+Example
+-------
+
+Using the expose decorator with controllers::
+
+    from tet.view import BaseController, expose
+
+    class UserController(BaseController):
+        @expose(renderer="json")
+        def index(self):
+            return {"users": []}
+
+        @expose(renderer="json")
+        def profile(self):
+            return {"user": "john"}
+
+Using ServiceViews for dependency injection::
+
+    from tet.view import ServiceViews
+    from pyramid.view import view_config
+
+    class UserViews(ServiceViews):
+        @view_config(route_name="users", renderer="json")
+        def list_users(self):
+            # self.request and self.context are available
+            return {"users": []}
+"""
+
 from inspect import isclass
 
 from pyramid.request import Request
-from pyramid.view import *
+from pyramid.view import *  # noqa: F403  (re-export pyramid.view API)
 from pyramid.view import view_config as _pyramid_view_config
 from pyramid_di import RequestScopedBaseService
 
 
 class view_config(_pyramid_view_config):
+    """Extended Pyramid view_config decorator."""
+
     def __init__(self, **settings):
-        super(view_config, self).__init__(**settings)
+        super().__init__(**settings)
 
 
 class expose:
-    """ """
+    """
+    Decorator for exposing controller methods as views.
 
-    venusian = venusian
+    Use on methods of :class:`BaseController` subclasses. The method name
+    becomes the view name (``index`` becomes the default view).
+    """
+
+    venusian = venusian  # noqa: F405  (re-exported via pyramid.view star import)
 
     def __init__(self, **settings):
         self.__dict__.update(settings)
@@ -50,7 +95,15 @@ class expose:
 
 
 class BaseController:
+    """
+    Base class for traversal-based controllers.
+
+    Supports nested controllers as class attributes and custom lookup
+    via ``_lookup`` method.
+    """
+
     def __getitem__(self, name):
+        """Look up child controller by name."""
         if hasattr(self, "_lookup"):
             try:
                 return self._lookup(name)
@@ -64,10 +117,16 @@ class BaseController:
             child.__name__ = name
             return child
 
-        raise KeyError("Child not found: %s" % name)
+        raise KeyError(f"Child not found: {name}")
 
 
 class ServiceViews(RequestScopedBaseService):
+    """
+    Base class for view classes with dependency injection support.
+
+    Provides ``self.request`` and ``self.context`` attributes.
+    """
+
     def __init__(self, request: Request):
         super().__init__(request=request)
         self.context = getattr(request, "context", None)

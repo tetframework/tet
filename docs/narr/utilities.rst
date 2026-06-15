@@ -54,10 +54,10 @@ URL-Safe Encoding
     from tet.util.base64 import url_safe_encode, url_safe_decode
 
     data = b"Hello, World!"
-    
+
     # Encode for safe use in URLs
     encoded = url_safe_encode(data)
-    
+
     # Decode back to original
     decoded = url_safe_decode(encoded)
 
@@ -72,7 +72,7 @@ Padding Handling
 
     # Encode without padding characters
     encoded = encode_no_padding(data)
-    
+
     # Decode with automatic padding restoration
     decoded = decode_with_padding(encoded)
 
@@ -95,10 +95,10 @@ Enhanced Dictionaries
             'port': 5432
         }
     })
-    
+
     # Access via attributes
     host = config.database.host
-    
+
     # Or traditional dictionary access
     port = config['database']['port']
 
@@ -132,10 +132,10 @@ Path Operations
 
     # Safely join paths (prevents directory traversal)
     safe_path = safe_join('/var/uploads', user_filename)
-    
+
     # Ensure directory exists
     ensure_dir('/var/logs/app')
-    
+
     # Normalize path for consistent handling
     normalized = normalize_path(user_input_path)
 
@@ -149,7 +149,7 @@ File Operations
     # Atomic file writing (prevents corruption)
     with atomic_write('/important/file.txt') as f:
         f.write(data)
-    
+
     # Create backup before modifying
     backup_path = backup_file('/important/file.txt')
     # Returns path to backup file
@@ -165,7 +165,7 @@ Temporary File Handling
     with temp_file(suffix='.json') as tmp:
         tmp.write(json_data)
         process_file(tmp.name)
-    
+
     # Temporary directory
     with temp_dir() as tmpdir:
         work_in_directory(tmpdir)
@@ -189,10 +189,10 @@ Data Export
 
     # Export to CSV
     csv_content = export_csv(data)
-    
+
     # Export to JSON with custom formatting
     json_content = export_json(data, indent=2, sort_keys=True)
-    
+
     # Export to XML
     xml_content = export_xml(data, root_element='users', item_element='user')
 
@@ -220,7 +220,7 @@ Interactive Shell
 
     # Create shell environment with application context
     env = make_shell_env(request)
-    
+
     # Available variables in shell:
     # - request: Current request object
     # - root: Application root
@@ -235,7 +235,7 @@ Development Utilities
 
     # Debug request information
     debug_info = debug_request(request)
-    
+
     # Inspect object properties
     object_info = inspect_object(some_object, include_private=False)
 
@@ -253,7 +253,7 @@ Pretty Printing
 
     # Pretty print JSON data
     pretty_print(complex_data)
-    
+
     # Colorized output for debugging
     colorized_print(data, style='dark')
 
@@ -291,7 +291,7 @@ Configuration Loading
     # Load configuration from multiple sources
     base_config = load_config('config/base.ini')
     env_config = load_config('config/production.ini')
-    
+
     # Merge configurations with precedence
     final_config = merge_configs(base_config, env_config)
 
@@ -326,10 +326,10 @@ Data Validation
 
     # Validate email address
     is_valid_email = validate_email('user@example.com')
-    
+
     # Validate URL
     is_valid_url = validate_url('https://example.com')
-    
+
     # Sanitize filename for safe storage
     safe_filename = sanitize_filename(user_uploaded_filename)
 

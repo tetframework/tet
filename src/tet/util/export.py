@@ -1,3 +1,33 @@
+"""
+Module export decorator utility.
+
+This module provides a decorator that automatically maintains ``__all__``
+for a module, making it easy to control what gets exported.
+
+Example
+-------
+
+Using the exporter decorator::
+
+    from tet.util.export import exporter
+
+    export, __all__ = exporter()
+
+    @export
+    def my_public_function():
+        pass
+
+    @export
+    class MyPublicClass:
+        pass
+
+    def _private_function():
+        pass
+
+    # __all__ now contains ['my_public_function', 'MyPublicClass']
+"""
+
+
 def exporter():
     """
     Create an easy export decorator with __all__

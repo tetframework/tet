@@ -1,6 +1,7 @@
 """
 Tests for tet.util.json module - JavaScript-safe JSON serialization.
 """
+
 import json
 
 from tet.util.json import js_safe_dumps
@@ -19,7 +20,7 @@ class TestJsSafeDumps:
 
     def test_basic_list(self):
         """Test basic list encoding."""
-        assert js_safe_dumps([1, 2, 3]) == '[1, 2, 3]'
+        assert js_safe_dumps([1, 2, 3]) == "[1, 2, 3]"
 
     def test_escapes_less_than(self):
         """Test that < is escaped for XSS prevention."""
@@ -75,7 +76,7 @@ class TestJsSafeDumps:
         data = {
             "html": "<div>Content</div>",
             "script": "</script>",
-            "items": ["<item1>", "</item2>", "&item3"]
+            "items": ["<item1>", "</item2>", "&item3"],
         }
         result = js_safe_dumps(data)
         assert "<" not in result
@@ -102,7 +103,7 @@ class TestJsSafeDumps:
             "mixed": ["<tag>", {"nested": "</closing>"}, "&escaped"],
             "number": 42,
             "boolean": True,
-            "null": None
+            "null": None,
         }
         result = js_safe_dumps(data)
         # Check all dangerous chars are escaped
@@ -118,11 +119,11 @@ class TestJsSafeDumps:
     def test_empty_values(self):
         """Test empty strings, lists, and dicts."""
         assert js_safe_dumps("") == '""'
-        assert js_safe_dumps([]) == '[]'
-        assert js_safe_dumps({}) == '{}'
+        assert js_safe_dumps([]) == "[]"
+        assert js_safe_dumps({}) == "{}"
 
     def test_special_json_values(self):
         """Test special JSON values like null, true, false."""
-        assert js_safe_dumps(None) == 'null'
-        assert js_safe_dumps(True) == 'true'
-        assert js_safe_dumps(False) == 'false'
+        assert js_safe_dumps(None) == "null"
+        assert js_safe_dumps(True) == "true"
+        assert js_safe_dumps(False) == "false"

@@ -1,109 +1,49 @@
-===
-Tet
-===
+tet documentation
+=================
 
-**Unearthly intelligent batteries-included application framework built on Pyramid**
+.. image:: https://img.shields.io/pypi/v/tet.svg
+   :alt: PyPI version
+   :target: https://pypi.org/project/tet/
 
-Tet is a web application framework that extends the Pyramid web framework with additional utilities, security features, and developer conveniences. It provides enhanced JSON handling, security features, SQLAlchemy integration, and various utility modules to make web development more productive.
+.. image:: https://img.shields.io/pypi/pyversions/tet.svg
+   :alt: Python versions
+   :target: https://pypi.org/project/tet/
 
-Getting Started
-===============
+.. image:: https://img.shields.io/pypi/l/tet.svg
+   :alt: License
+   :target: https://pypi.org/project/tet/
 
-Installation
-------------
+.. image:: https://img.shields.io/github/stars/tetframework/tet.svg?style=social
+   :alt: GitHub stars
+   :target: https://github.com/tetframework/tet
 
-Install Tet using pip::
-
-    pip install tet
-
-Quick Example
--------------
-
-Here's a simple "Hello World" application using Tet's application factory::
-
-    from tet.config import application_factory, ALL_FEATURES
-    from pyramid.response import Response
-
-
-    def hello_world(request):
-        return Response('Hello World!')
-
-
-    @application_factory(included_features=ALL_FEATURES)
-    def main(config):
-        """Tet application factory."""
-        config.add_route('hello', '/')
-        config.add_view(hello_world, route_name='hello')
-
-
-    if __name__ == '__main__':
-        from wsgiref.simple_server import make_server
-        app = main({})  # Empty global_config
-        server = make_server('0.0.0.0', 6543, app)
-        server.serve_forever()
-
-Documentation
-=============
+Unearthly intelligent batteries-included application framework built on Pyramid.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Contents
+
+   readme
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Narrative Documentation
 
    narr/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+
    tutorials/index
-   api/index
 
-Key Features
-============
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
 
-**Enhanced Security**
-   Built-in CSRF protection, enhanced authorization policies, and safe JSON serialization.
+   api/modules
 
-**SQLAlchemy Integration**
-   Custom root factories and enhanced database support with proper exception handling.
-
-**JSON Utilities** 
-   Safe JavaScript JSON serialization with XSS prevention and custom type adapters.
-
-**Pyramid Extensions**
-   Enhanced request/response objects, session management, and various utility modules.
-
-**Developer Friendly**
-   Comprehensive testing support, type hints, and extensive documentation.
-
-Support and Development
-=======================
-
-* **GitHub Repository**: https://github.com/tetframework/tet (if available)
-* **Issue Tracker**: Report bugs and request features
-* **Documentation**: Complete API and narrative documentation
-* **Author**: Antti Haapala <antti.haapala@anttipatterns.com>
-
-Framework Integration
-=====================
-
-Tet integrates seamlessly with the Pyramid ecosystem:
-
-* **Pyramid**: Built on top of the robust Pyramid web framework
-* **SQLAlchemy**: Enhanced ORM integration with custom factories
-* **pyramid_di**: Dependency injection support with request-scoped services
-* **Passlib**: Password hashing and security utilities
-
-What's New
-==========
-
-Version 0.4.1 includes:
-
-* Request-scoped services with pyramid_di integration
-* Enhanced SQLAlchemy root factory with proper exception handling
-* Improved namespace package support
-* Python 3.6+ compatibility
-
-License
-=======
-
-Tet is licensed under the Python Software Foundation License.
-
-Indices and Tables
+Indices and tables
 ==================
 
 * :ref:`genindex`

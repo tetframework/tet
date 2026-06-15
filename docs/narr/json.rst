@@ -17,10 +17,10 @@ Standard JSON serialization can be unsafe when embedded in HTML:
 .. code-block:: python
 
     import json
-    
+
     # This data contains potentially dangerous characters
     user_data = {"message": "</script><script>alert('XSS')</script>"}
-    
+
     # Standard JSON - UNSAFE for HTML embedding
     unsafe_json = json.dumps(user_data)
     # Result: {"message": "</script><script>alert('XSS')</script>"}
@@ -42,10 +42,10 @@ Tet's ``js_safe_dumps`` function escapes dangerous characters:
 .. code-block:: python
 
     from tet.util.json import js_safe_dumps
-    
+
     user_data = {"message": "</script><script>alert('XSS')</script>"}
-    
-    # Safe for embedding in HTML/JavaScript  
+
+    # Safe for embedding in HTML/JavaScript
     safe_json = js_safe_dumps(user_data)
     # Result: {"message": "\\u003c/script\\u003e\\u003cscript\\u003ealert('XSS')\\u003c/script\\u003e"}
 
@@ -55,7 +55,7 @@ Escaped Characters
 ``js_safe_dumps`` escapes these dangerous characters:
 
 * ``<`` → ``\\u003c`` (Prevents tag injection)
-* ``>`` → ``\\u003e`` (Prevents tag injection) 
+* ``>`` → ``\\u003e`` (Prevents tag injection)
 * ``/`` → ``\\u002f`` (Prevents script tag closing)
 * ``&`` → ``\\u0026`` (Prevents HTML entity issues)
 * ``\u2028`` → ``\\u2028`` (Line separator - can break JavaScript)
@@ -99,7 +99,7 @@ The enhanced renderer includes adapters for:
 .. code-block:: python
 
     from datetime import datetime, date
-    
+
     data = {
         'created': datetime.now(),
         'birthday': date(1990, 1, 1)
@@ -123,7 +123,7 @@ Enable the enhanced JSON renderer in your application:
         with Configurator() as config:
             config.include('tet.renderers.json')
             # Enhanced JSON renderer is now available
-            
+
             return config.make_wsgi_app()
 
 The renderer is automatically registered as the default ``json`` renderer.
@@ -149,13 +149,13 @@ Use the ``add_json_adapter`` directive to register custom type adapters:
     def main():
         with Configurator() as config:
             config.include('tet.renderers.json')
-            
+
             # Add custom adapter for Decimal
             config.add_json_adapter(
                 for_=Decimal,
                 adapter=decimal_adapter
             )
-            
+
             return config.make_wsgi_app()
 
 Multiple Renderers
@@ -170,16 +170,16 @@ You can register multiple JSON renderers with different names:
     def main():
         with Configurator() as config:
             config.include('tet.renderers.json')
-            
+
             # Create a custom renderer for API responses
             api_renderer = JSON()
             api_renderer.add_adapter(MyModel, lambda obj, req: obj.to_dict())
-            
+
             config.add_json_renderer(
                 renderer=api_renderer,
                 name='api_json'
             )
-            
+
             return config.make_wsgi_app()
 
 Then use it in your views:
@@ -221,10 +221,10 @@ For processing JSON request bodies:
             json_data = request.json_body
         except ValueError:
             return {'error': 'Invalid JSON'}
-        
+
         # Process the JSON data
         result = process_data(json_data)
-        
+
         return {'result': result}
 
 Error Handling
@@ -242,7 +242,7 @@ Handle JSON-related errors gracefully:
             data = request.json_body
         except ValueError as e:
             raise HTTPBadRequest(json_body={'error': 'Invalid JSON: ' + str(e)})
-        
+
         return process_data(data)
 
 Performance Considerations
@@ -272,9 +272,9 @@ Performance Considerations
     def api_view(request):
         page = int(request.params.get('page', 1))
         limit = int(request.params.get('limit', 20))
-        
+
         data = get_paginated_data(page=page, limit=limit)
-        
+
         return {
             'data': data,
             'page': page,

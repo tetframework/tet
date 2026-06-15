@@ -107,7 +107,7 @@ python -m tet.util.pshell  # If available
 - **Python Compatibility**: Supports Python 3.6+ (as of version 0.4.1)
 
 ### Dependencies
-- **Core Dependencies**: 
+- **Core Dependencies**:
   - `pyramid>=1.9` - Base web framework
   - `passlib` - Password hashing
   - `sqlalchemy` - Database ORM
@@ -244,7 +244,7 @@ def includeme(config: Configurator):
     # Include Tet security features
     config.include('tet.security.csrf')
     config.include('tet.security.authorization')
-    
+
     # CSRF is now enabled by default
     # Custom authorization policies can be set
 ```

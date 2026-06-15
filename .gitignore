@@ -40,3 +40,4 @@ venv*
 test_env/
 test_project/
 CLAUDE_from_form_processor.md
+.venv*

@@ -1,3 +1,45 @@
+"""
+Simple SQLAlchemy session setup with transaction management.
+
+This module provides utilities for setting up SQLAlchemy with Pyramid,
+including transaction management via ``pyramid_tm`` and dependency
+injection via ``pyramid_di``.
+
+Features
+--------
+
+- Automatic session lifecycle tied to request
+- Transaction management with automatic commit/rollback
+- Alembic-friendly naming conventions for constraints
+- Dependency injection of sessions via pyramid_di
+
+Example
+-------
+
+Basic setup::
+
+    from tet.config import application_factory
+    from tet.sqlalchemy.simple import declarative_base
+
+    Base = declarative_base()
+
+    @application_factory(included_features=["services"])
+    def main(config):
+        config.include("tet.sqlalchemy.simple")
+        config.setup_sqlalchemy()
+        config.scan()
+
+Accessing the session in views::
+
+    from pyramid.view import view_config
+    from sqlalchemy.orm import Session
+
+    @view_config(route_name="users", renderer="json")
+    def list_users(request):
+        session = request.find_service(Session)
+        return [u.to_dict() for u in session.query(User).all()]
+"""
+
 from typing import Any, Optional
 
 from pyramid.config import Configurator
@@ -40,13 +82,17 @@ def declarative_base(*, metadata=_NOT_SET, naming_convention=_NOT_SET) -> Any:
 def get_tm_session(session_factory, transaction_manager):
     """
     Get a ``sqlalchemy.orm.Session`` instance backed by a transaction.
+
     This function will hook the session to the transaction manager which
     will take care of committing any changes.
+
     - When using pyramid_tm it will automatically be committed or aborted
       depending on whether an exception is raised.
     - When using scripts you should wrap the session in a manager yourself.
       For example::
+
           import transaction
+
           engine = get_engine(settings)
           session_factory = get_session_factory(engine)
           with transaction.manager:
@@ -64,7 +110,7 @@ def setup_sqlalchemy(
     *,
     settings: Optional[dict] = _NOT_SET,
     prefix: str = "sqlalchemy.",
-    engine: Optional["sqlalchemy.Engine"] = _NOT_SET,
+    engine: Optional["sqlalchemy.Engine"] = _NOT_SET,  # noqa: F821  (optional dep, imported lazily)
     name: str = "",
 ) -> None:
     """
@@ -120,7 +166,7 @@ def includeme(config: Configurator) -> None:
     :param config: the configurator
     """
     try:
-        import sqlalchemy
+        import sqlalchemy  # noqa: F401  (availability check)
     except ImportError as e:
         raise RuntimeError(
             "sqlalchemy cannot be imported, unable to include tet.sqlalchemy.simple"

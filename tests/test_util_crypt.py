@@ -1,6 +1,7 @@
 """
 Tests for tet.util.crypt module - Password hashing utilities.
 """
+
 from tet.util.crypt import crypt, password_hash, verify
 
 
@@ -93,6 +94,7 @@ class TestCrypt:
     def test_password_hash_is_sha256_crypt(self):
         """Test that password_hash is indeed sha256_crypt."""
         from passlib.hash import sha256_crypt
+
         assert password_hash is sha256_crypt
 
     def test_hash_format(self):

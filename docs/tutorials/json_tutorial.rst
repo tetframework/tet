@@ -22,13 +22,13 @@ Enable Tet's JSON renderer in your application:
         with Configurator() as config:
             # Include Tet's enhanced JSON renderer
             config.include('tet.renderers.json')
-            
+
             return config.make_wsgi_app()
 
 The enhanced renderer automatically handles:
 
 - **datetime objects**: Converted to ISO format strings
-- **date objects**: Converted to ISO format strings  
+- **date objects**: Converted to ISO format strings
 - **SQLAlchemy NamedTuple results**: Converted to dictionaries
 
 Built-in Type Support
@@ -51,7 +51,7 @@ Built-in Type Support
     # Output:
     # {
     #     "timestamp": "2024-01-15T10:30:00",
-    #     "birthday": "1990-05-15", 
+    #     "birthday": "1990-05-15",
     #     "message": "Hello, World!",
     #     "count": 42
     # }
@@ -66,14 +66,14 @@ The JSON renderer automatically handles SQLAlchemy query results:
     @view_config(route_name='user_stats', renderer='json')
     def user_stats(request):
         session = request.dbsession
-        
+
         # Named tuple results are automatically serializable
         stats = session.query(
             User.name,
             User.email,
             func.count(Post.id).label('post_count')
         ).outerjoin(Post).group_by(User.id).all()
-        
+
         return {'user_stats': stats}  # Automatically converted to list of dicts
 
 Custom JSON Adapters
@@ -100,11 +100,11 @@ Simple Type Adapters
     def main():
         with Configurator() as config:
             config.include('tet.renderers.json')
-            
+
             # Add custom adapters
             config.add_json_adapter(for_=Decimal, adapter=decimal_adapter)
             config.add_json_adapter(for_=UUID, adapter=uuid_adapter)
-            
+
             return config.make_wsgi_app()
 
 Model Adapters
@@ -116,7 +116,7 @@ Create adapters for your SQLAlchemy models:
 
     class User(Base):
         __tablename__ = 'users'
-        
+
         id = Column(Integer, primary_key=True)
         username = Column(String(50), unique=True)
         email = Column(String(100))
@@ -152,11 +152,11 @@ Adapters receive the request object, allowing for context-aware serialization:
             'username': user.username,
             'is_active': user.is_active
         }
-        
+
         # Include email only for authenticated users
         if request.authenticated_userid:
             base_data['email'] = user.email
-        
+
         # Include admin data for admin users
         if 'group:admin' in request.effective_principals:
             base_data.update({
@@ -164,7 +164,7 @@ Adapters receive the request object, allowing for context-aware serialization:
                 'last_login': user.last_login,
                 'login_count': user.login_count
             })
-        
+
         return base_data
 
 Multiple JSON Renderers
@@ -182,23 +182,23 @@ Specialized Renderers
     def main():
         with Configurator() as config:
             config.include('tet.renderers.json')
-            
+
             # Create specialized renderers
-            
+
             # Pretty-printed JSON for debugging
             debug_renderer = JSON(indent=2, sort_keys=True)
             config.add_json_renderer(
                 renderer=debug_renderer,
                 name='debug_json'
             )
-            
+
             # Compact JSON for APIs
             api_renderer = JSON(separators=(',', ':'))
             config.add_json_renderer(
                 renderer=api_renderer,
                 name='api_json'
             )
-            
+
             # Public API renderer with limited data
             public_renderer = JSON()
             public_renderer.add_adapter(User, user_public_adapter)
@@ -206,7 +206,7 @@ Specialized Renderers
                 renderer=public_renderer,
                 name='public_json'
             )
-            
+
             return config.make_wsgi_app()
 
 Using Different Renderers
@@ -277,10 +277,10 @@ Use Tet's ``js_safe_dumps`` function:
             'preferences': request.user.preferences,
             'bio': request.user.bio  # Could contain dangerous content
         }
-        
+
         # Safe for HTML embedding
         safe_user_json = js_safe_dumps(user_data)
-        
+
         return {'user_json': safe_user_json}
 
 Template Integration
@@ -297,16 +297,16 @@ In your Chameleon template:
     </head>
     <body>
         <div id="user-profile"></div>
-        
+
         <script>
             // Safe JSON embedding - no XSS risk
             var userData = ${user_json|n};
-            
+
             // Use the data safely
-            document.getElementById('user-profile').innerHTML = 
+            document.getElementById('user-profile').innerHTML =
                 '<h1>' + escapeHtml(userData.name) + '</h1>' +
                 '<p>' + escapeHtml(userData.bio) + '</p>';
-            
+
             function escapeHtml(text) {
                 var div = document.createElement('div');
                 div.textContent = text;
@@ -330,13 +330,13 @@ Handle complex nested objects:
 
     class BlogPost(Base):
         __tablename__ = 'posts'
-        
+
         id = Column(Integer, primary_key=True)
         title = Column(String(200))
         content = Column(Text)
         author_id = Column(Integer, ForeignKey('users.id'))
         created_at = Column(DateTime, default=datetime.utcnow)
-        
+
         # Relationship
         author = relationship('User', back_populates='posts')
         comments = relationship('Comment', back_populates='post')
@@ -375,11 +375,11 @@ Handle paginated results:
         """Adapter for paginated query results."""
         page = int(request.params.get('page', 1))
         per_page = int(request.params.get('per_page', 20))
-        
+
         # Paginate the query
         total = query_result.count()
         items = query_result.offset((page - 1) * per_page).limit(per_page).all()
-        
+
         return {
             'items': items,  # Will be serialized by their own adapters
             'pagination': {
@@ -452,12 +452,12 @@ Lazy Loading with JSON
     def users_api_light(request):
         """Optimized user listing - only load needed fields."""
         session = request.dbsession
-        
+
         # Only load fields we'll serialize
         users = session.query(User).options(
             load_only(User.id, User.username, User.email, User.created_at)
         ).all()
-        
+
         return {'users': users}
 
 Caching JSON Responses
@@ -479,7 +479,7 @@ Caching JSON Responses
     def stats_api(request):
         """Cached JSON response."""
         stats = get_cached_stats()
-        
+
         # Manual JSON response with caching headers
         response = Response(
             body=json.dumps(stats),
@@ -539,7 +539,7 @@ Input Validation
     def create_user(request):
         # Validate input
         validate_json_input(request.json_body, USER_CREATE_SCHEMA)
-        
+
         # Create user with validated data
         user_data = request.json_body
         user = User(
@@ -547,7 +547,7 @@ Input Validation
             email=user_data['email'],
             age=user_data.get('age')
         )
-        
+
         return {'user': user}
 
 Testing JSON APIs
@@ -565,7 +565,7 @@ Basic JSON Testing
         response = app.get('/api/users/1')
         assert response.status_code == 200
         assert response.content_type == 'application/json'
-        
+
         data = response.json
         assert 'id' in data
         assert 'username' in data
@@ -574,10 +574,10 @@ Basic JSON Testing
     def test_json_input_validation(app):
         # Test invalid JSON input
         invalid_data = {'username': 'x'}  # Too short
-        
+
         response = app.post_json('/api/users', invalid_data, expect_errors=True)
         assert response.status_code == 400
-        
+
         error_data = response.json
         assert 'error' in error_data
 
@@ -603,7 +603,7 @@ Custom JSON Assertions
     def test_user_json_structure(app):
         response = app.get('/api/users/1')
         user_data = response.json
-        
+
         assert_json_structure(user_data, ['id', 'username', 'email', 'created_at'])
         assert_iso_datetime(user_data['created_at'])
 

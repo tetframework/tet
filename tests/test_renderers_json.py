@@ -1,11 +1,11 @@
 """
 Tests for tet.renderers.json module - Enhanced JSON renderer with adapters.
 """
+
 import datetime
 from unittest.mock import Mock
 
 from pyramid.renderers import JSON
-
 from tet.renderers.json import (
     _get_json_renderer_registry,
     add_json_adapter,
@@ -21,17 +21,17 @@ class TestJsonRendererRegistry:
     def test_get_json_renderer_registry_creates_new(self, pyramid_config):
         """Test that registry is created if it doesn't exist."""
         # Ensure no registry exists
-        assert not hasattr(pyramid_config.registry, 'tet_json_renderers')
+        assert not hasattr(pyramid_config.registry, "tet_json_renderers")
 
         registry = _get_json_renderer_registry(pyramid_config)
 
-        assert hasattr(pyramid_config.registry, 'tet_json_renderers')
+        assert hasattr(pyramid_config.registry, "tet_json_renderers")
         assert registry == {}
         assert pyramid_config.registry.tet_json_renderers is registry
 
     def test_get_json_renderer_registry_returns_existing(self, pyramid_config):
         """Test that existing registry is returned."""
-        existing = {'test': 'renderer'}
+        existing = {"test": "renderer"}
         pyramid_config.registry.tet_json_renderers = existing
 
         registry = _get_json_renderer_registry(pyramid_config)
@@ -50,8 +50,8 @@ class TestHookJsonRenderer:
 
         hook_json_renderer(pyramid_config, renderer=renderer)
 
-        pyramid_config.add_renderer.assert_called_once_with('json', renderer)
-        assert pyramid_config.registry.tet_json_renderers['json'] is renderer
+        pyramid_config.add_renderer.assert_called_once_with("json", renderer)
+        assert pyramid_config.registry.tet_json_renderers["json"] is renderer
 
     def test_hook_json_renderer_custom_name(self, pyramid_config):
         """Test hooking renderer with custom name."""
@@ -59,10 +59,10 @@ class TestHookJsonRenderer:
         pyramid_config.add_renderer = Mock()
         pyramid_config.registry.tet_json_renderers = {}
 
-        hook_json_renderer(pyramid_config, renderer=renderer, name='custom_json')
+        hook_json_renderer(pyramid_config, renderer=renderer, name="custom_json")
 
-        pyramid_config.add_renderer.assert_called_once_with('custom_json', renderer)
-        assert pyramid_config.registry.tet_json_renderers['custom_json'] is renderer
+        pyramid_config.add_renderer.assert_called_once_with("custom_json", renderer)
+        assert pyramid_config.registry.tet_json_renderers["custom_json"] is renderer
 
 
 class TestAddJsonAdapter:
@@ -71,42 +71,37 @@ class TestAddJsonAdapter:
     def test_add_json_adapter_default_renderer(self, pyramid_config):
         """Test adding adapter to default json renderer."""
         mock_renderer = Mock()
-        pyramid_config.registry.tet_json_renderers = {'json': mock_renderer}
+        pyramid_config.registry.tet_json_renderers = {"json": mock_renderer}
 
         class CustomType:
             pass
 
         def adapter(obj, req):
-            return {'custom': True}
+            return {"custom": True}
 
         add_json_adapter(pyramid_config, for_=CustomType, adapter=adapter)
 
         mock_renderer.add_adapter.assert_called_once_with(
-            type_or_iface=CustomType,
-            adapter=adapter
+            type_or_iface=CustomType, adapter=adapter
         )
 
     def test_add_json_adapter_custom_renderer(self, pyramid_config):
         """Test adding adapter to custom renderer."""
         mock_renderer = Mock()
-        pyramid_config.registry.tet_json_renderers = {'custom': mock_renderer}
+        pyramid_config.registry.tet_json_renderers = {"custom": mock_renderer}
 
         class CustomType:
             pass
 
         def adapter(obj, req):
-            return {'custom': True}
+            return {"custom": True}
 
         add_json_adapter(
-            pyramid_config,
-            for_=CustomType,
-            adapter=adapter,
-            renderer='custom'
+            pyramid_config, for_=CustomType, adapter=adapter, renderer="custom"
         )
 
         mock_renderer.add_adapter.assert_called_once_with(
-            type_or_iface=CustomType,
-            adapter=adapter
+            type_or_iface=CustomType, adapter=adapter
         )
 
 
@@ -150,11 +145,10 @@ class TestConstructDefaultRenderer:
         mock_factory.return_value = mock_renderer
 
         renderer = construct_default_renderer(
-            renderer_factory=mock_factory,
-            some_arg='value'
+            renderer_factory=mock_factory, some_arg="value"
         )
 
-        mock_factory.assert_called_once_with(some_arg='value')
+        mock_factory.assert_called_once_with(some_arg="value")
         assert renderer is mock_renderer
 
     def test_datetime_adapter_functionality(self):
@@ -167,7 +161,7 @@ class TestConstructDefaultRenderer:
         result = render_fn({"dt": dt}, {})
         parsed = json.loads(result)
 
-        assert parsed["dt"] == '2024-03-15T14:30:00.123456'
+        assert parsed["dt"] == "2024-03-15T14:30:00.123456"
 
     def test_date_adapter_functionality(self):
         """Test the date adapter works correctly."""
@@ -179,7 +173,7 @@ class TestConstructDefaultRenderer:
         result = render_fn({"d": d}, {})
         parsed = json.loads(result)
 
-        assert parsed["d"] == '2024-03-15'
+        assert parsed["d"] == "2024-03-15"
 
 
 class TestIncludeme:
@@ -195,7 +189,7 @@ class TestIncludeme:
         # Should add renderer
         assert pyramid_config.add_renderer.called
         call_args = pyramid_config.add_renderer.call_args
-        assert call_args[0][0] == 'json'
+        assert call_args[0][0] == "json"
         assert isinstance(call_args[0][1], JSON)
 
         # Should add directives
@@ -204,8 +198,8 @@ class TestIncludeme:
         # Check directives added
         calls = pyramid_config.add_directive.call_args_list
         directive_names = [call[0][0] for call in calls]
-        assert 'add_json_renderer' in directive_names
-        assert 'add_json_adapter' in directive_names
+        assert "add_json_renderer" in directive_names
+        assert "add_json_adapter" in directive_names
 
     def test_includeme_creates_registry(self, pyramid_config):
         """Test that includeme creates the renderer registry."""
@@ -214,8 +208,8 @@ class TestIncludeme:
 
         includeme(pyramid_config)
 
-        assert hasattr(pyramid_config.registry, 'tet_json_renderers')
-        assert 'json' in pyramid_config.registry.tet_json_renderers
+        assert hasattr(pyramid_config.registry, "tet_json_renderers")
+        assert "json" in pyramid_config.registry.tet_json_renderers
 
     def test_includeme_renderer_has_adapters(self, pyramid_config):
         """Test that the renderer has default adapters."""
@@ -230,6 +224,7 @@ class TestIncludeme:
         assert isinstance(renderer, JSON)
         # Test by rendering actual objects
         import json
+
         dt = datetime.datetime.now()
         render_fn = renderer({})
         result = render_fn({"dt": dt}, {})
@@ -248,9 +243,9 @@ class TestIncludeme:
         add_json_adapter_func = None
 
         for call in pyramid_config.add_directive.call_args_list:
-            if call[0][0] == 'add_json_renderer':
+            if call[0][0] == "add_json_renderer":
                 add_json_renderer_func = call[0][1]
-            elif call[0][0] == 'add_json_adapter':
+            elif call[0][0] == "add_json_adapter":
                 add_json_adapter_func = call[0][1]
 
         assert add_json_renderer_func is hook_json_renderer
@@ -259,15 +254,13 @@ class TestIncludeme:
         # Test using the directives
         class TestClass:
             def to_dict(self):
-                return {'test': 'value'}
+                return {"test": "value"}
 
         # Add a custom adapter
         add_json_adapter_func(
-            pyramid_config,
-            for_=TestClass,
-            adapter=lambda obj, req: obj.to_dict()
+            pyramid_config, for_=TestClass, adapter=lambda obj, req: obj.to_dict()
         )
 
         # Verify it was added to the renderer
         # Since the renderer is mocked in add_renderer, we just verify the structure
-        assert 'json' in pyramid_config.registry.tet_json_renderers
+        assert "json" in pyramid_config.registry.tet_json_renderers

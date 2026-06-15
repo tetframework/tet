@@ -26,17 +26,17 @@ Create your database models and configuration:
 
     class User(Base):
         __tablename__ = 'users'
-        
+
         id = Column(Integer, primary_key=True)
         username = Column(String(50), unique=True, nullable=False)
         email = Column(String(100), unique=True, nullable=False)
         password_hash = Column(String(128))
         created_at = Column(DateTime, default=datetime.utcnow)
         is_active = Column(Boolean, default=True)
-        
+
         # Relationships
         posts = relationship('Post', back_populates='author')
-        
+
         def __json__(self, request):
             """JSON serialization for Tet's renderer."""
             return {
@@ -49,17 +49,17 @@ Create your database models and configuration:
 
     class Post(Base):
         __tablename__ = 'posts'
-        
+
         id = Column(Integer, primary_key=True)
         title = Column(String(200), nullable=False)
         content = Column(Text)
         author_id = Column(Integer, ForeignKey('users.id'))
         created_at = Column(DateTime, default=datetime.utcnow)
         is_published = Column(Boolean, default=False)
-        
+
         # Relationships
         author = relationship('User', back_populates='posts')
-        
+
         def __json__(self, request):
             return {
                 'id': self.id,
@@ -119,16 +119,16 @@ Tet's SQLAlchemy Integration
     @application_factory(included_features=ALL_FEATURES)
     def main(config):
         """Tet application factory with database support."""
-        
+
         # Include Tet's simple SQLAlchemy setup
         config.include('tet.sqlalchemy.simple')
-        
+
         # Setup SQLAlchemy - automatically configures:
         # - pyramid_di service registration
-        # - pyramid_tm transaction management  
+        # - pyramid_tm transaction management
         # - Request-scoped sessions
         config.setup_sqlalchemy()
-        
+
         # Routes and views
         config.add_route('users', '/users')
         config.add_route('user', '/users/{id}')
@@ -155,7 +155,7 @@ Automatic Features Included
 When you use `config.setup_sqlalchemy()`, Tet automatically configures:
 
 1. **pyramid_di**: For dependency injection
-2. **pyramid_tm**: For transaction management  
+2. **pyramid_tm**: For transaction management
 3. **Request-scoped sessions**: Sessions tied to request lifecycle
 4. **Automatic commit/rollback**: Based on HTTP response status
 5. **Session cleanup**: Sessions closed automatically after request
@@ -177,7 +177,7 @@ Basic Root Factory
 
     class UserRootFactory(SQLARootFactory):
         """Root factory for user resources."""
-        
+
         def supplier(self, item):
             """Look up user by ID."""
             session = self.request.find_service(name='dbsession')
@@ -189,11 +189,11 @@ Basic Root Factory
 
     class PostRootFactory(SQLARootFactory):
         """Root factory for post resources."""
-        
+
         def supplier(self, item):
             """Look up post by ID or slug."""
             session = self.request.find_service(name='dbsession')
-            
+
             try:
                 # Try numeric ID first
                 post_id = int(item)
@@ -212,11 +212,11 @@ Multi-Model Root Factory
 
     class ApplicationRootFactory(SQLARootFactory):
         """Root factory that handles multiple resource types."""
-        
+
         def supplier(self, item):
             """Route to appropriate model based on item format."""
             session = self.request.find_service(name='dbsession')
-            
+
             # Handle different patterns
             if item.startswith('user-'):
                 user_id = item[5:]  # Remove 'user-' prefix
@@ -224,14 +224,14 @@ Multi-Model Root Factory
                     return session.query(User).filter_by(id=int(user_id)).one()
                 except (NoResultFound, ValueError):
                     raise
-            
+
             elif item.startswith('post-'):
                 post_id = item[5:]  # Remove 'post-' prefix
                 try:
                     return session.query(Post).filter_by(id=int(post_id)).one()
                 except (NoResultFound, ValueError):
                     raise
-            
+
             else:
                 # Try as numeric ID for backwards compatibility
                 try:
@@ -251,11 +251,11 @@ Configure traversal with root factories:
         with Configurator(settings=settings) as config:
             # Set root factory for traversal
             config.set_root_factory(ApplicationRootFactory)
-            
+
             # Add traversal routes
             config.add_route('user_detail', '/users/*traverse')
             config.add_route('post_detail', '/posts/*traverse')
-            
+
             return config.make_wsgi_app()
 
 Database Views
@@ -277,28 +277,28 @@ User Management Views
 
     class UserViews:
         """User management views with autowired dependencies."""
-        
+
         # Database session automatically injected via pyramid_di
         session: Session = autowired()
-        
+
         @view_config(route_name='users', request_method='GET', renderer='json')
         def list_users(self, request):
             """List all users."""
             # Pagination
             page = int(request.params.get('page', 1))
             per_page = int(request.params.get('per_page', 20))
-            
+
             query = self.session.query(User).filter_by(is_active=True)
-            
+
             # Apply filters
             if 'search' in request.params:
                 search = f"%{request.params['search']}%"
                 query = query.filter(User.username.ilike(search))
-            
+
             # Paginate
             total = query.count()
             users = query.offset((page - 1) * per_page).limit(per_page).all()
-            
+
             return {
                 'users': users,  # Automatically serialized by Tet
                 'pagination': {
@@ -313,7 +313,7 @@ User Management Views
         def get_user(self, request):
             """Get single user by ID."""
             user_id = request.matchdict['id']
-            
+
             try:
                 user = self.session.query(User).filter_by(id=int(user_id)).one()
                 return {'user': user}
@@ -324,30 +324,30 @@ User Management Views
         def create_user(self, request):
             """Create new user."""
             data = request.json_body
-            
+
             # Validation
             if not data.get('username') or not data.get('email'):
                 raise HTTPBadRequest("Username and email are required")
-            
+
             # Check for existing user
             existing = self.session.query(User).filter(
-                (User.username == data['username']) | 
+                (User.username == data['username']) |
                 (User.email == data['email'])
             ).first()
-            
+
             if existing:
                 raise HTTPBadRequest("Username or email already exists")
-            
+
             # Create user
             user = User(
                 username=data['username'],
                 email=data['email'],
                 password_hash=hash_password(data.get('password', ''))
             )
-            
+
             self.session.add(user)
             # No manual commit needed - pyramid_tm handles it automatically
-            
+
             return {'user': user, 'message': 'User created successfully'}
 
 Relationship Handling
@@ -360,18 +360,18 @@ Relationship Handling
         """Get posts by user."""
         user_id = request.matchdict['user_id']
         session = request.find_service(name='dbsession')
-        
+
         try:
             user = session.query(User).filter_by(id=int(user_id)).one()
         except (NoResultFound, ValueError):
             raise HTTPNotFound("User not found")
-        
+
         # Get user's posts with eager loading
         posts = session.query(Post).filter_by(
             author_id=user.id,
             is_published=True
         ).order_by(Post.created_at.desc()).all()
-        
+
         return {
             'user': user,
             'posts': posts,
@@ -389,7 +389,7 @@ Complex Queries
     def user_statistics(request):
         """Get user statistics."""
         session = request.find_service(name='dbsession')
-        
+
         # Complex query with aggregations
         stats = session.query(
             User.id,
@@ -397,7 +397,7 @@ Complex Queries
             func.count(Post.id).label('post_count'),
             func.max(Post.created_at).label('last_post_date')
         ).outerjoin(Post).group_by(User.id).all()
-        
+
         # The results are automatically JSON-serializable
         return {'user_stats': stats}
 
@@ -405,12 +405,12 @@ Complex Queries
     def popular_posts(request):
         """Get popular posts with author info."""
         session = request.find_service(name='dbsession')
-        
+
         # Join query with eager loading
         posts = session.query(Post).join(User).filter(
             Post.is_published == True
         ).order_by(desc(Post.created_at)).limit(10).all()
-        
+
         # Custom serialization including author info
         result = []
         for post in posts:
@@ -424,7 +424,7 @@ Complex Queries
                     'username': post.author.username
                 }
             })
-        
+
         return {'posts': result}
 
 Transaction Management
@@ -444,11 +444,11 @@ With Tet's SQLAlchemy setup, transactions are handled automatically:
         """Tet automatically includes pyramid_tm."""
         config.include('tet.sqlalchemy.simple')
         config.setup_sqlalchemy()
-        
+
         # pyramid_tm is automatically included and configured
         # Transactions are:
         # - Started for each request
-        # - Committed on successful response (2xx, 3xx)  
+        # - Committed on successful response (2xx, 3xx)
         # - Rolled back on exceptions or error responses (4xx, 5xx)
 
 Working with Automatic Transactions
@@ -462,13 +462,13 @@ Your views don't need to manage transactions manually:
     def complex_database_operation(request):
         """Complex operation with automatic transaction management."""
         session = request.find_service(Session)
-        
+
         # All operations happen in one transaction
         # Create user
         user = User(username='newuser', email='new@example.com')
         session.add(user)
         session.flush()  # Get the ID without committing
-        
+
         # Create initial post
         post = Post(
             title='Welcome Post',
@@ -477,7 +477,7 @@ Your views don't need to manage transactions manually:
             is_published=True
         )
         session.add(post)
-        
+
         # If view returns successfully, transaction commits automatically
         # If any exception is raised, transaction rolls back automatically
         return {'message': 'Operation completed successfully', 'user': user}
@@ -494,16 +494,16 @@ To trigger a rollback, raise an HTTP exception:
     @view_config(route_name='conditional_operation', renderer='json')
     def conditional_operation(request):
         session = request.find_service(Session)
-        
+
         # Do some work
         user = User(username='test')
         session.add(user)
-        
+
         # Check some condition
         if some_validation_fails():
             # This will cause automatic transaction rollback
             raise HTTPBadRequest("Validation failed")
-        
+
         # If we reach here, transaction will commit automatically
         return {'user': user}
 
@@ -517,7 +517,7 @@ Bulk Operations
         """Bulk import users efficiently."""
         session = request.find_service(name='dbsession')
         users_data = request.json_body.get('users', [])
-        
+
         try:
             # Bulk insert for better performance
             user_objects = []
@@ -528,16 +528,16 @@ Bulk Operations
                     password_hash=hash_password(user_data.get('password', ''))
                 )
                 user_objects.append(user)
-            
+
             # Bulk save
             session.bulk_save_objects(user_objects)
             session.commit()
-            
+
             return {
                 'message': f'Successfully imported {len(user_objects)} users',
                 'count': len(user_objects)
             }
-            
+
         except Exception as e:
             session.rollback()
             raise HTTPBadRequest(f"Bulk import failed: {str(e)}")
@@ -579,11 +579,11 @@ Simple Migration System
                     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
-            
+
             # Get applied migrations
             result = conn.execute(text("SELECT id FROM migrations"))
             applied = {row[0] for row in result}
-            
+
             # Run pending migrations
             for migration_id, sql in MIGRATIONS.items():
                 if migration_id not in applied:
@@ -664,7 +664,7 @@ Testing Views with Database
     def test_create_user(dbsession):
         from views.users import create_user
         from pyramid.testing import DummyRequest
-        
+
         # Mock request
         request = DummyRequest()
         request.find_service = lambda name: dbsession
@@ -673,13 +673,13 @@ Testing Views with Database
             'email': 'new@example.com',
             'password': 'password123'
         }
-        
+
         # Test the view
         result = create_user(request)
-        
+
         assert result['message'] == 'User created successfully'
         assert result['user'].username == 'newuser'
-        
+
         # Verify in database
         user = dbsession.query(User).filter_by(username='newuser').first()
         assert user is not None
@@ -688,20 +688,20 @@ Testing Views with Database
     def test_user_posts(dbsession, sample_user):
         from views.users import get_user_posts
         from pyramid.testing import DummyRequest
-        
+
         # Create test posts
         post1 = Post(title='Post 1', author_id=sample_user.id, is_published=True)
         post2 = Post(title='Post 2', author_id=sample_user.id, is_published=False)
         dbsession.add_all([post1, post2])
         dbsession.commit()
-        
+
         # Test the view
         request = DummyRequest()
         request.find_service = lambda name: dbsession
         request.matchdict = {'user_id': str(sample_user.id)}
-        
+
         result = get_user_posts(request)
-        
+
         assert result['user'].id == sample_user.id
         assert len(result['posts']) == 1  # Only published posts
         assert result['posts'][0].title == 'Post 1'
@@ -714,16 +714,16 @@ Testing Root Factories
     def test_user_root_factory(dbsession, sample_user):
         from root import UserRootFactory
         from pyramid.testing import DummyRequest
-        
+
         request = DummyRequest()
         request.find_service = lambda name: dbsession
-        
+
         root = UserRootFactory(request)
-        
+
         # Test successful lookup
         found_user = root[str(sample_user.id)]
         assert found_user == sample_user
-        
+
         # Test not found
         with pytest.raises(KeyError):
             root['999']
@@ -744,13 +744,13 @@ Query Optimization
     def optimized_posts_view(request):
         """Optimized post loading with eager loading."""
         session = request.find_service(name='dbsession')
-        
+
         # Eager load relationships to avoid N+1 queries
         posts = session.query(Post).options(
             joinedload(Post.author),  # Join load for one-to-one/many-to-one
             selectinload(Post.comments)  # Select load for one-to-many
         ).filter_by(is_published=True).all()
-        
+
         return {'posts': posts}
 
 Connection Pooling

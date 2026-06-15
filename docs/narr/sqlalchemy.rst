@@ -41,10 +41,10 @@ Register your root factory with Pyramid:
     def main():
         with Configurator() as config:
             config.set_root_factory(MyRootFactory)
-            
+
             # Your routes using traversal
             config.add_route('item', '/items/{id}')
-            
+
             return config.make_wsgi_app()
 
 Exception Handling
@@ -72,7 +72,7 @@ A more sophisticated root factory with caching and multiple model types:
     class ApplicationRoot(SQLARootFactory):
         def supplier(self, item):
             session = self.request.dbsession
-            
+
             # Handle different ID patterns
             if re.match(r'^\d+$', item):
                 # Numeric ID - look up by primary key
@@ -80,14 +80,14 @@ A more sophisticated root factory with caching and multiple model types:
                     return session.query(MyModel).get(int(item))
                 except (ValueError, NoResultFound):
                     raise
-            
+
             elif re.match(r'^[a-f0-9-]{36}$', item):
                 # UUID pattern - look up by UUID
                 try:
                     return session.query(MyModel).filter_by(uuid=item).one()
                 except NoResultFound:
                     raise
-            
+
             else:
                 # Try slug lookup
                 try:
@@ -117,7 +117,7 @@ Use Tet's simple SQLAlchemy setup for automatic configuration:
     def main(config):
         # Include Tet's SQLAlchemy integration
         config.include('tet.sqlalchemy.simple')
-        
+
         # This automatically configures:
         # - pyramid_di for dependency injection
         # - pyramid_tm for transaction management
@@ -136,10 +136,10 @@ Access the database session via pyramid_di autowired dependency injection:
 
     class ItemViews:
         """Views with autowired database session."""
-        
+
         # Database session automatically injected via pyramid_di
         session: Session = autowired()
-        
+
         @view_config(route_name='items', renderer='json')
         def list_items(self, request):
             # Use the autowired session - automatically managed
@@ -186,12 +186,12 @@ SQLAlchemy models can be made JSON-serializable:
 
     class User(Base):
         __tablename__ = 'users'
-        
+
         id = Column(Integer, primary_key=True)
         name = Column(String(50))
         email = Column(String(100))
         created = Column(DateTime)
-        
+
         def __json__(self, request):
             """Custom JSON serialization method."""
             return {
@@ -217,7 +217,7 @@ Alternatively, use the JSON adapter system:
         with Configurator() as config:
             config.include('tet.renderers.json')
             config.add_json_adapter(for_=User, adapter=user_adapter)
-            
+
             return config.make_wsgi_app()
 
 Query Result Handling
@@ -230,10 +230,10 @@ Tet automatically handles SQLAlchemy query results:
     @view_config(route_name='user_summary', renderer='json')
     def user_summary(request):
         session = request.find_service(name='dbsession')
-        
+
         # Named tuple results are automatically serializable
         results = session.query(User.name, User.email).all()
-        
+
         return {'users': results}  # Automatically converted to list of dicts
 
 Database Configuration
@@ -262,25 +262,25 @@ A complete database configuration example:
     def get_db_session(request):
         session_factory = request.registry['db_session_factory']
         session = session_factory()
-        
+
         def cleanup(request):
             session.close()
-        
+
         request.add_finished_callback(cleanup)
         return session
 
     def main(global_config, **settings):
         config = Configurator(settings=settings)
-        
+
         # Database setup
         engine = get_engine(settings)
         session_factory = get_session_factory(engine)
         config.registry['db_session_factory'] = session_factory
-        
+
         # Include Tet features
         config.include('pyramid_di')
         config.include('tet.renderers.json')
-        
+
         return config.make_wsgi_app()
 
 Connection Pooling
@@ -351,23 +351,23 @@ Test your root factories with proper mocking:
         obj = MyModel(name='test')
         dbsession.add(obj)
         dbsession.commit()
-        
+
         # Mock request
         request = Mock()
         request.dbsession = dbsession
-        
+
         # Test root factory
         root = MyRootFactory(request)
         result = root[str(obj.id)]
-        
+
         assert result == obj
 
     def test_root_factory_not_found(dbsession):
         request = Mock()
         request.dbsession = dbsession
-        
+
         root = MyRootFactory(request)
-        
+
         with pytest.raises(KeyError):
             root['nonexistent']
 

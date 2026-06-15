@@ -1,12 +1,12 @@
 """
 Tests for tet.sqlalchemy.factory module - SQLAlchemy root factory with exception handling.
 """
+
 from unittest.mock import Mock
 
 import pytest
 from sqlalchemy.exc import DataError
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
-
 from tet.sqlalchemy.factory import SQLARootFactory
 
 
@@ -26,10 +26,10 @@ class TestSQLARootFactory:
         expected_result = Mock()
         factory.supplier = Mock(return_value=expected_result)
 
-        result = factory['test_id']
+        result = factory["test_id"]
 
         assert result is expected_result
-        factory.supplier.assert_called_once_with('test_id')
+        factory.supplier.assert_called_once_with("test_id")
 
     def test_getitem_raises_keyerror_on_noresult(self, pyramid_request):
         """Test that NoResultFound is converted to KeyError."""
@@ -39,7 +39,7 @@ class TestSQLARootFactory:
         factory.supplier = Mock(side_effect=NoResultFound("No result found"))
 
         with pytest.raises(KeyError) as exc_info:
-            _ = factory['missing_id']
+            _ = factory["missing_id"]
 
         assert str(exc_info.value) == "'missing_id'"
         # Check the cause chain
@@ -55,7 +55,7 @@ class TestSQLARootFactory:
         )
 
         with pytest.raises(KeyError) as exc_info:
-            _ = factory['duplicate_id']
+            _ = factory["duplicate_id"]
 
         assert str(exc_info.value) == "'duplicate_id'"
         # Check the cause chain
@@ -72,7 +72,7 @@ class TestSQLARootFactory:
         factory.supplier = Mock(side_effect=data_error)
 
         with pytest.raises(KeyError) as exc_info:
-            _ = factory['invalid_id']
+            _ = factory["invalid_id"]
 
         assert str(exc_info.value) == "'invalid_id'"
         # Check the cause chain
@@ -87,7 +87,7 @@ class TestSQLARootFactory:
 
         # Should NOT be converted to KeyError
         with pytest.raises(ValueError) as exc_info:
-            _ = factory['test_id']
+            _ = factory["test_id"]
 
         assert str(exc_info.value) == "Some other error"
 
@@ -137,7 +137,7 @@ class TestSQLARootFactory:
         """Test factory can be used as Pyramid traversal root."""
 
         class TraversalFactory(SQLARootFactory):
-            __name__ = ''
+            __name__ = ""
             __parent__ = None
 
             def supplier(self, name):

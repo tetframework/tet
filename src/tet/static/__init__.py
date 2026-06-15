@@ -1,3 +1,38 @@
+"""
+Static file serving with cache-busting support.
+
+This module provides utilities for serving static files with automatic
+cache-busting via versioned URLs. When the application starts, a unique
+cache-breaker token is generated based on the current timestamp.
+
+Features
+--------
+
+- Automatic cache-busting URLs for static assets
+- Graceful handling of old cache-breaker values (301 redirect)
+- Graceful handling of future cache-breaker values (503 retry)
+
+Example
+-------
+
+Setting up static files with cache-busting::
+
+    from tet.config import application_factory
+
+    @application_factory()
+    def main(config):
+        config.include("tet.static")
+        config.add_static_view_with_breaker(
+            name="static/{breaker}",
+            path="myapp:static",
+        )
+        config.scan()
+
+In templates, use the versioned URL::
+
+    <link href="${request.static_url('myapp:static/style.css')}" rel="stylesheet">
+"""
+
 import os
 import time
 from shlex import quote
@@ -13,10 +48,13 @@ cachebreaker = None
 
 
 def set_cachebreaker(config, cachebreaker):
+    """Set a custom cache-breaker value."""
     config.registry.cachebreaker = cachebreaker
 
 
 def make_redirector(redirected_route):
+    """Create a view that redirects to the correct cache-breaker URL."""
+
     def redirect_breaker(request):
         current_breaker = request.registry.cachebreaker
         breaker = request.matchdict["breaker"]
@@ -41,8 +79,18 @@ def make_redirector(redirected_route):
 
 
 def add_static_view_with_breaker(config, name, path, **kw):
+    """
+    Add a static view with cache-busting support.
+
+    :param config: Pyramid Configurator
+    :param name: URL pattern with ``{breaker}`` placeholder
+    :param path: Asset specification for static files
+    :param kw: Additional arguments passed to add_static_view
+    """
     if "{breaker}" not in name:
-        raise ValueError("Invalid path to add_static_view_with_breaker: missing name")
+        raise ValueError(
+            "Invalid path to add_static_view_with_breaker: missing {breaker}"
+        )
 
     url = name.replace("{breaker}", config.registry.cachebreaker)
     config.add_static_view(name=url, path=path, **kw)
@@ -57,6 +105,12 @@ def add_static_view_with_breaker(config, name, path, **kw):
 
 
 def includeme(config):
-    config.registry.cachebreaker = "%012d" % int(time.time() * 1000)
+    """
+    Pyramid includeme for static file cache-busting.
+
+    Adds ``config.set_cachebreaker()`` and ``config.add_static_view_with_breaker()``
+    directives.
+    """
+    config.registry.cachebreaker = f"{int(time.time() * 1000):012d}"
     config.add_directive("set_cachebreaker", set_cachebreaker)
     config.add_directive("add_static_view_with_breaker", add_static_view_with_breaker)

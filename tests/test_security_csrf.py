@@ -1,6 +1,7 @@
 """
 Tests for tet.security.csrf module - CSRF protection configuration.
 """
+
 from unittest.mock import Mock
 
 from tet.security.csrf import includeme
@@ -18,7 +19,9 @@ class TestCSRFProtection:
         includeme(pyramid_config)
 
         # Verify it was called with require_csrf=True
-        pyramid_config.set_default_csrf_options.assert_called_once_with(require_csrf=True)
+        pyramid_config.set_default_csrf_options.assert_called_once_with(
+            require_csrf=True
+        )
 
     def test_includeme_with_real_configurator(self):
         """Test with a real Pyramid Configurator."""

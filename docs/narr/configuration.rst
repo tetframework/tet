@@ -66,11 +66,11 @@ For fine-grained control, create the configurator manually:
             included_features=['renderers.json', 'security.csrf'],
             excluded_features=['i18n']
         )
-        
+
         # Your configuration
         config.add_route('home', '/')
         config.scan()
-        
+
         return config.make_wsgi_app()
 
 Configuration Directives
@@ -90,7 +90,7 @@ JSON Renderer Directives
 
     # Create custom renderer
     api_renderer = JSON()
-    
+
     # Register with custom name
     config.add_json_renderer(
         renderer=api_renderer,
@@ -125,7 +125,7 @@ Authorization Directive
 
     # Your custom authorization policy
     policy = MyAuthorizationPolicy()
-    
+
     # Register with enhanced support
     config.set_authorization_policy(policy)
 
@@ -145,14 +145,14 @@ The CSRF module sets secure defaults but can be customized:
         with Configurator(settings=settings) as config:
             # Include CSRF with custom options
             config.include('tet.security.csrf')
-            
+
             # Override CSRF settings if needed
             config.set_default_csrf_options(
                 require_csrf=True,
                 token='csrf_token',
                 header='X-CSRF-Token'
             )
-            
+
             return config.make_wsgi_app()
 
 JSON Renderer Configuration
@@ -168,20 +168,20 @@ Customize the JSON renderer behavior:
         with Configurator(settings=settings) as config:
             # Include JSON renderer
             config.include('tet.renderers.json')
-            
+
             # Add custom adapters
             config.add_json_adapter(
                 for_=MyModel,
                 adapter=lambda obj, req: obj.to_dict()
             )
-            
+
             # Create specialized renderer
             api_renderer = JSON(sort_keys=True, indent=2)
             config.add_json_renderer(
                 renderer=api_renderer,
                 name='pretty_json'
             )
-            
+
             return config.make_wsgi_app()
 
 Settings Integration
@@ -222,7 +222,7 @@ Configure security-related settings:
     # CSRF settings
     csrf.secret = different-secret-for-csrf
     csrf.timeout = 7200
-    
+
     # Authorization settings
     auth.policy = myapp.security.AuthPolicy
     auth.secret = auth-signing-secret
@@ -236,11 +236,11 @@ Access settings in your application code:
 
     def my_view(request):
         settings = request.registry.settings
-        
+
         # Access configuration values
         database_url = settings.get('sqlalchemy.url')
         debug_mode = settings.get('debug', False)
-        
+
         return {'debug': debug_mode}
 
 Environment Configuration
@@ -261,15 +261,15 @@ Development Configuration
             'reload_templates': True,
             'sqlalchemy.echo': True,
         })
-        
+
         with Configurator(settings=settings) as config:
             config.include('tet.security.csrf')
             config.include('tet.renderers.json')
-            
+
             # Development-only includes
             if settings.get('debug'):
                 config.include('pyramid_debugtoolbar')
-            
+
             return config.make_wsgi_app()
 
 Production Configuration
@@ -286,15 +286,15 @@ Production Configuration
             'session.secure': True,
             'session.httponly': True,
         })
-        
+
         with Configurator(settings=settings) as config:
             config.include('tet.security.csrf')
             config.include('tet.security.authorization')
             config.include('tet.renderers.json')
-            
+
             # Production-only security
             config.set_default_csrf_options(require_csrf=True)
-            
+
             return config.make_wsgi_app()
 
 Testing Configuration
@@ -310,14 +310,14 @@ Testing Configuration
             'sqlalchemy.url': 'sqlite:///:memory:',
             'csrf.disable': True,  # Disable CSRF for easier testing
         })
-        
+
         with Configurator(settings=settings) as config:
             config.include('tet.renderers.json')
-            
+
             # Conditional CSRF inclusion
             if not settings.get('csrf.disable'):
                 config.include('tet.security.csrf')
-            
+
             return config.make_wsgi_app()
 
 Advanced Configuration
@@ -343,13 +343,13 @@ Configure root factories and other components:
         with Configurator(settings=settings) as config:
             # Set custom root factory
             config.set_root_factory(MyRootFactory)
-            
+
             # Configure based on settings
             if settings.get('use_traversal'):
                 config.add_route('api', '/api/*traverse')
             else:
                 config.add_route('api', '/api/{action}')
-            
+
             return config.make_wsgi_app()
 
 Service Configuration
@@ -370,7 +370,7 @@ Configure services with pyramid_di:
         with Configurator(settings=settings) as config:
             config.include('pyramid_di')
             config.include('tet.renderers.json')
-            
+
             # Services are automatically available
             return config.make_wsgi_app()
 
@@ -390,11 +390,11 @@ Settings Validation
             'sqlalchemy.url',
             'session.secret',
         ]
-        
+
         missing = [key for key in required if not settings.get(key)]
         if missing:
             raise ValueError(f"Missing required settings: {missing}")
-        
+
         # Validate specific values
         if len(settings.get('session.secret', '')) < 32:
             raise ValueError("session.secret must be at least 32 characters")
@@ -402,7 +402,7 @@ Settings Validation
     def main(global_config, **settings):
         # Validate configuration early
         validate_settings(settings)
-        
+
         with Configurator(settings=settings) as config:
             # Configuration continues...
             return config.make_wsgi_app()
@@ -419,26 +419,26 @@ Settings Helper
 
     def get_settings_helper(settings):
         """Create a helper for accessing settings."""
-        
+
         class SettingsHelper:
             def __init__(self, settings):
                 self.settings = settings
-            
+
             def get_bool(self, key, default=False):
                 value = self.settings.get(key, default)
                 if isinstance(value, str):
                     return value.lower() in ('true', '1', 'yes', 'on')
                 return bool(value)
-            
+
             def get_int(self, key, default=0):
                 return int(self.settings.get(key, default))
-            
+
             def get_list(self, key, separator=',', default=None):
                 value = self.settings.get(key, default or [])
                 if isinstance(value, str):
                     return [item.strip() for item in value.split(separator)]
                 return value
-        
+
         return SettingsHelper(settings)
 
 Configuration Profiles
@@ -473,10 +473,10 @@ Profile System
         # Load profile-specific settings
         profile = settings.get('profile', 'development')
         profile_settings = PROFILES.get(profile, {})
-        
+
         # Merge settings with profile taking precedence
         final_settings = {**settings, **profile_settings}
-        
+
         with Configurator(settings=final_settings) as config:
             # Configure based on merged settings
             return config.make_wsgi_app()

@@ -1,10 +1,58 @@
+"""
+Application configuration utilities for Tet.
+
+This module provides the main entry points for creating Tet applications:
+
+- :func:`create_configurator` - Create a Pyramid Configurator with Tet features
+- :func:`application_factory` - Decorator for WSGI application factory functions
+
+Features
+--------
+
+Tet supports the following features that can be selectively included:
+
+- ``services`` - Dependency injection via pyramid_di
+- ``i18n`` - Internationalization support
+- ``renderers.json`` - JSON rendering with custom type adapters
+- ``renderers.tonnikala`` - Tonnikala template engine integration
+- ``renderers.tonnikala.i18n`` - Tonnikala with i18n support
+- ``security.authorization`` - Custom authorization policy
+- ``security.csrf`` - CSRF token protection
+
+Example
+-------
+
+Using the application_factory decorator::
+
+    from tet.config import application_factory, ALL_FEATURES
+
+    @application_factory(included_features=ALL_FEATURES)
+    def main(config):
+        config.add_route('home', '/')
+        config.scan()
+
+Using create_configurator directly::
+
+    from tet.config import create_configurator, ALL_FEATURES
+
+    def main(global_config, **settings):
+        config = create_configurator(
+            global_config=global_config,
+            settings=settings,
+            included_features=ALL_FEATURES,
+        )
+        config.add_route('home', '/')
+        config.scan()
+        return config.make_wsgi_app()
+"""
+
 import sys
 from collections import ChainMap
 from collections.abc import Mapping
 from functools import wraps
 from typing import Any, Callable
 
-from pyramid.config import *
+from pyramid.config import *  # noqa: F403  (re-export pyramid.config API)
 from pyramid.config import Configurator
 
 from tet.decorators import deprecated
@@ -40,10 +88,10 @@ class TetAppFactory:
 
     @classmethod
     def instantiate(cls):
-        return super(TetAppFactory, cls).__new__(cls)
+        return super().__new__(cls)
 
     def __init__(self, *args, **kwargs):
-        super(TetAppFactory, self).__init__()
+        super().__init__()
 
     def _dummy(self, config: Configurator):
         pass
@@ -139,6 +187,19 @@ def create_configurator(
     package=None,
     **kw,
 ) -> Configurator:
+    """
+    Create a Pyramid Configurator with Tet features.
+
+    :param global_config: Global configuration dict (from PasteDeploy)
+    :param settings: Application settings dict
+    :param merge_global_config: If True, merge global_config into settings
+    :param configurator_class: Configurator class to use
+    :param included_features: Tet features to include (see :data:`ALL_FEATURES`)
+    :param excluded_features: Tet features to exclude
+    :param package: Package for the configurator (defaults to caller's package)
+    :param kw: Additional arguments passed to the Configurator
+    :return: Configured Pyramid Configurator instance
+    """
     defaults = {}
     if merge_global_config and isinstance(global_config, Mapping):
         settings = ChainMap(settings, global_config, defaults)
@@ -190,40 +251,41 @@ def application_factory(
     **extra_parameters,
 ):
     """
-    A decorator for main method / application configurator for Tet. The
-    wrapped function must accept a single argument - the Configurator. The
-    wrapper itself accepts arguments (global_config, **settings) like an
+    A decorator for main method / application configurator for Tet.
+
+    The wrapped function must accept a single argument - the Configurator. The
+    wrapper itself accepts arguments ``(global_config, **settings)`` like an
     ordinary Pyramid/Paster application entry point does.
 
-    If configure_only=False (the default), then the return value is a
+    If ``configure_only=False`` (the default), then the return value is a
     WSGI application created from the configurator.
 
-    `included_features` contains an iterable of features that should be
+    ``included_features`` contains an iterable of features that should be
     automatically included in the application. By default all standard Tet
-    features are  included. For maximal future compatibility you can specify the
+    features are included. For maximal future compatibility you can specify the
     included feature names here.
 
-    `excluded_features` should be an iterable of features that shouldn't be
-     automatically included - this serves as a fast way to get all standard
-     features except a named few.
+    ``excluded_features`` should be an iterable of features that shouldn't be
+    automatically included - this serves as a fast way to get all standard
+    features except a named few.
 
-    `package` should be the package passed to the Configurator object;
+    ``package`` should be the package passed to the Configurator object;
     otherwise the package of the caller is assumed.
 
     :param factory_function: The actual wrapped factory function that
-    accepts parameter (config: Configurator)
+        accepts parameter (config: Configurator)
     :param configure_only: True if no WSGI application is to be made, false
-    to actually create the WSGI application as the return value
+        to actually create the WSGI application as the return value
     :param included_features: The iterable of included features. This can
-    in turn contain other iterables; they are flattened by the wrapper into
-    a list of strings.
+        in turn contain other iterables; they are flattened by the wrapper into
+        a list of strings.
     :param excluded_features: The iterable of excluded features. This can
-    in turn contain other iterables; they are flattened by the wrapper into
-    a list of strings.
+        in turn contain other iterables; they are flattened by the wrapper into
+        a list of strings.
     :param extra_parameters: extra parameters that will be passed as-is to
-    the actual configurator generation.
-    :return: the WSGI app if `configure_only` is `False`; `config`, if
-    `configure_only` is `True`.
+        the actual configurator generation.
+    :return: the WSGI app if ``configure_only`` is ``False``; ``config``, if
+        ``configure_only`` is ``True``.
     """
 
     if package is None:

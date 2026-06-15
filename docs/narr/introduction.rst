@@ -90,10 +90,10 @@ Tet uses a modular architecture where each component can be included independent
             config.include('tet.security.csrf')
             config.include('tet.renderers.json')
             config.include('tet.security.authorization')
-            
+
             # Your application configuration
             # ...
-            
+
             return config.make_wsgi_app()
 
 This modular approach allows you to adopt Tet features gradually and only include what your application needs.

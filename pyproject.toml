@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tet"
-version = "0.4.1"
+version = "0.5.0"
 description = "Unearthly intelligent batteries-included application framework built on Pyramid"
 readme = "README.md"
-requires-python = ">=3.6"
-license = {text = "PSF"}
+requires-python = ">=3.8"
+license = {text = "MIT"}
 authors = [
     {name = "Antti Haapala", email = "antti.haapala@anttipatterns.com"},
 ]
@@ -17,15 +17,15 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Framework :: Pyramid",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Python Software Foundation License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet :: WWW/HTTP :: WSGI",
     "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
@@ -98,6 +98,8 @@ extend-exclude = '''
 [tool.ruff]
 line-length = 88
 target-version = "py38"
+
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -114,15 +116,15 @@ ignore = [
     "W191",  # indentation contains tabs
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["B", "C4"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-third-party = ["pyramid", "sqlalchemy", "passlib", "pyramid_di"]
 
 [tool.mypy]
-python_version = "3.6"
+python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

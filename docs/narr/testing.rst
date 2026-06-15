@@ -1,6 +1,6 @@
-=======
+=========
 Testing
-=======
+=========
 
 Tet applications can be thoroughly tested using pytest and various testing utilities. This chapter covers testing patterns, fixtures, and best practices for Tet applications.
 
@@ -53,7 +53,7 @@ Basic View Testing
     def test_home_view():
         request = DummyRequest()
         response = home_view(request)
-        
+
         assert response['message'] == 'Hello, World!'
 
 JSON View Testing
@@ -65,13 +65,13 @@ Test views that use Tet's JSON renderer:
 
     def test_api_view(config, request):
         from myapp.views import api_view
-        
+
         # Configure JSON renderer
         config.include('tet.renderers.json')
-        
+
         # Test the view
         result = api_view(request)
-        
+
         assert 'data' in result
         assert isinstance(result['data'], list)
 
@@ -159,30 +159,30 @@ Test Tet's SQLAlchemy root factories:
         from myapp.models import User
         from myapp.root import UserRootFactory
         from pyramid.testing import DummyRequest
-        
+
         # Create test data
         user = User(name='Test User', email='test@example.com')
         dbsession.add(user)
         dbsession.commit()
-        
+
         # Test root factory
         request = DummyRequest()
         request.dbsession = dbsession
-        
+
         root = UserRootFactory(request)
         found_user = root[str(user.id)]
-        
+
         assert found_user == user
 
     def test_root_factory_not_found(dbsession):
         from myapp.root import UserRootFactory
         from pyramid.testing import DummyRequest
-        
+
         request = DummyRequest()
         request.dbsession = dbsession
-        
+
         root = UserRootFactory(request)
-        
+
         with pytest.raises(KeyError):
             root['nonexistent']
 
@@ -200,11 +200,11 @@ CSRF Testing
         # GET request should work
         response = app.get('/form')
         assert response.status_code == 200
-        
+
         # POST without CSRF token should fail
         with pytest.raises(Exception):  # CSRF error
             app.post('/form', {'data': 'test'})
-        
+
         # POST with CSRF token should work
         # (Implementation depends on your CSRF setup)
 
@@ -216,10 +216,10 @@ Authorization Testing
     def test_authorization_policy():
         from myapp.security import MyAuthorizationPolicy
         from pyramid.testing import DummyRequest
-        
+
         policy = MyAuthorizationPolicy()
         request = DummyRequest()
-        
+
         # Test permission checking
         result = policy.permits(
             request=request,
@@ -227,7 +227,7 @@ Authorization Testing
             principals=['user:123'],
             permission='edit'
         )
-        
+
         assert result is True  # or False, depending on logic
 
 JSON Testing
@@ -243,16 +243,16 @@ JSON Serialization Testing
     def test_json_serialization(config):
         from tet.renderers.json import construct_default_renderer
         from datetime import datetime
-        
+
         renderer = construct_default_renderer()
-        
+
         data = {
             'timestamp': datetime.now(),
             'count': 42
         }
-        
+
         result = renderer(data, {})
-        
+
         # Should be valid JSON
         import json
         parsed = json.loads(result)
@@ -266,13 +266,13 @@ Safe JSON Testing
 
     def test_safe_json_serialization():
         from tet.util.json import js_safe_dumps
-        
+
         dangerous_data = {
             'script': '</script><script>alert("XSS")</script>'
         }
-        
+
         safe_json = js_safe_dumps(dangerous_data)
-        
+
         # Should escape dangerous characters
         assert '<' not in safe_json
         assert '\\u003c' in safe_json
@@ -292,19 +292,19 @@ Service Mocking
     def test_view_with_service():
         from myapp.views import user_list_view
         from pyramid.testing import DummyRequest
-        
+
         # Mock the database service
         mock_session = Mock()
         mock_session.query.return_value.all.return_value = [
             Mock(id=1, name='User 1'),
             Mock(id=2, name='User 2'),
         ]
-        
+
         request = DummyRequest()
         request.find_service = Mock(return_value=mock_session)
-        
+
         result = user_list_view(request)
-        
+
         assert len(result['users']) == 2
 
 External Service Mocking
@@ -315,11 +315,11 @@ External Service Mocking
     @patch('myapp.services.external_api_call')
     def test_external_service(mock_api_call):
         mock_api_call.return_value = {'status': 'success'}
-        
+
         from myapp.services import process_external_data
-        
+
         result = process_external_data('test_data')
-        
+
         assert result['status'] == 'success'
         mock_api_call.assert_called_once_with('test_data')
 
@@ -337,7 +337,7 @@ User Authentication Fixtures
     def authenticated_user(dbsession):
         """Create an authenticated user for testing."""
         from myapp.models import User
-        
+
         user = User(
             username='testuser',
             email='test@example.com',
@@ -362,27 +362,27 @@ Application State Fixtures
     def sample_data(dbsession):
         """Create sample data for testing."""
         from myapp.models import User, Post
-        
+
         users = [
             User(username=f'user{i}', email=f'user{i}@example.com')
             for i in range(3)
         ]
-        
+
         for user in users:
             dbsession.add(user)
-        
+
         dbsession.commit()
-        
+
         posts = [
             Post(title=f'Post {i}', content=f'Content {i}', author=users[0])
             for i in range(5)
         ]
-        
+
         for post in posts:
             dbsession.add(post)
-        
+
         dbsession.commit()
-        
+
         return {'users': users, 'posts': posts}
 
 Performance Testing
@@ -401,7 +401,7 @@ Response Time Testing
         start_time = time.time()
         response = app.get('/api/users')
         end_time = time.time()
-        
+
         assert response.status_code == 200
         assert end_time - start_time < 1.0  # Should respond within 1 second
 
@@ -415,11 +415,11 @@ Load Testing with Locust
 
     class WebsiteUser(HttpUser):
         wait_time = between(1, 3)
-        
+
         @task
         def index_page(self):
             self.client.get("/")
-        
+
         @task(3)
         def api_users(self):
             self.client.get("/api/users")
@@ -479,7 +479,7 @@ pytest Configuration
     python_files = test_*.py
     python_classes = Test*
     python_functions = test_*
-    addopts = 
+    addopts =
         --strict-markers
         --disable-warnings
         --cov=myapp
@@ -493,28 +493,28 @@ GitHub Actions Example
 
     # .github/workflows/test.yml
     name: Tests
-    
+
     on: [push, pull_request]
-    
+
     jobs:
       test:
         runs-on: ubuntu-latest
         strategy:
           matrix:
             python-version: [3.8, 3.9, '3.10', 3.11]
-        
+
         steps:
         - uses: actions/checkout@v4
         - name: Set up Python ${{ matrix.python-version }}
           uses: actions/setup-python@v4
           with:
             python-version: ${{ matrix.python-version }}
-        
+
         - name: Install dependencies
           run: |
             python -m pip install --upgrade pip
             pip install -e .[dev]
-        
+
         - name: Run tests
           run: pytest
 

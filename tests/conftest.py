@@ -1,6 +1,7 @@
 """
 Pytest configuration and fixtures for Tet framework tests.
 """
+
 from unittest.mock import Mock
 
 import pytest
@@ -50,5 +51,5 @@ def mock_db_session():
 def mock_model():
     """Create a mock SQLAlchemy model."""
     model = Mock()
-    model.__tablename__ = 'test_model'
+    model.__tablename__ = "test_model"
     return model

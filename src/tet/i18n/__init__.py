@@ -1,3 +1,38 @@
+"""
+Internationalization support for Tet applications.
+
+This module provides i18n/l10n integration including:
+
+- Automatic ``_()`` and ``gettext()`` functions in templates
+- ``ngettext()`` for pluralization
+- Request methods for translation (``request.translate``, ``request.pluralize``)
+
+Example
+-------
+
+Enabling i18n::
+
+    from tet.config import application_factory
+
+    @application_factory(included_features=["i18n"])
+    def main(config):
+        config.add_translation_dirs("myapp:locale")
+        config.scan()
+
+Using translations in views::
+
+    from pyramid.view import view_config
+
+    @view_config(route_name="hello", renderer="json")
+    def hello(request):
+        return {"message": request.translate("Hello, World!")}
+
+In Tonnikala templates::
+
+    <p>${_("Welcome to our site!")}</p>
+    <p>${ngettext("1 item", "{n} items", count, mapping={"n": count})}</p>
+"""
+
 import sys
 
 from pyramid.config import Configurator
@@ -6,6 +41,11 @@ from pyramid.threadlocal import get_current_request
 
 
 def add_renderer_globals(event):
+    """
+    Subscriber that adds i18n functions to renderer globals.
+
+    Adds ``_``, ``gettext``, ``ngettext``, and ``localizer`` to the template context.
+    """
     request = event.get("request")
 
     if request is None:
@@ -18,6 +58,15 @@ def add_renderer_globals(event):
 
 
 def configure_i18n(config: Configurator, default_domain: str):
+    """
+    Configure i18n support for a Pyramid application.
+
+    Adds ``request.translate`` and ``request.pluralize`` methods, and
+    registers subscribers to add i18n functions to template contexts.
+
+    :param config: Pyramid Configurator
+    :param default_domain: Default translation domain
+    """
     config.add_subscriber(add_renderer_globals, "pyramid.events.BeforeRender")
     config.add_subscriber(add_renderer_globals, "tet.viewlet.IBeforeViewletRender")
 
@@ -57,6 +106,11 @@ def configure_i18n(config: Configurator, default_domain: str):
 
 
 def includeme(config: Configurator):
+    """
+    Pyramid includeme function for i18n support.
+
+    Uses ``default_i18n_domain`` setting or the package name as the domain.
+    """
     default_domain = config.get_settings().get(
         "default_i18n_domain", config.package.__name__
     )

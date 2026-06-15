@@ -1,3 +1,15 @@
+"""
+Interface utilities bridging Python ABCs and Zope interfaces.
+
+This module provides experimental utilities for working with interfaces
+that bridge Python's Abstract Base Classes (ABCs) with Zope interfaces.
+
+Note
+----
+
+This module is experimental and may change in future versions.
+"""
+
 from abc import ABCMeta
 
 from zope.interface import Interface as _ZInterface
@@ -32,7 +44,7 @@ class InterfaceImplementor(_InterfaceBase):
     @property
     def zope_interface(cls):
         raise AttributeError(
-            f"{cls} is not a SimpleInterface, and " "therefore has no Zope Interface"
+            f"{cls} is not a SimpleInterface, and therefore has no Zope Interface"
         )
 
 

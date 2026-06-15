@@ -1,3 +1,33 @@
+"""
+Decorator utilities for Tet applications.
+
+This module provides useful decorators:
+
+- :func:`deprecated` - Mark functions as deprecated
+- :class:`reify_attr` - Cached property with configurable attribute name
+
+Example
+-------
+
+Marking a function as deprecated::
+
+    from tet.decorators import deprecated
+
+    @deprecated
+    def old_function():
+        pass
+
+Using reify_attr for cached properties::
+
+    from tet.decorators import reify_attr
+
+    class MyClass:
+        @reify_attr
+        def expensive_computation(self):
+            # This will only be called once per instance
+            return compute_something()
+"""
+
 import warnings
 from functools import update_wrapper
 
@@ -8,7 +38,10 @@ def deprecated(func):
     when the function is used."""
 
     def new_func(*args, **kwargs):
-        warnings.warn(f"Call to deprecated function {func.__qualname__}.")
+        warnings.warn(
+            f"Call to deprecated function {func.__qualname__}.",
+            stacklevel=2,
+        )
 
         return func(*args, **kwargs)
 
@@ -20,10 +53,17 @@ def deprecated(func):
 
 class reify_attr:
     """
-    reify_attr is like pyramid reify, but instead of getting the name of the
-    attribute from the decorated method, it uses the name of actual attribute,
-    by finding it on the class in Python <=3.5, and using the ``__set_name__``
-    on Python 3.6.
+    A cached property descriptor that uses the actual attribute name.
+
+    Unlike Pyramid's ``reify`` which gets the attribute name from the decorated
+    method, ``reify_attr`` uses the name of the actual attribute it's assigned to.
+    This is determined via ``__set_name__``, falling back to finding the attribute
+    on the class if ``__set_name__`` is not called (e.g., when the descriptor is
+    assigned dynamically).
+
+    This pattern is useful as a building block for descriptors like ``autowired``
+    in pyramid_di, where the descriptor needs to know its attribute name to cache
+    the resolved value on the instance.
     """
 
     def __init__(self, wrapped):

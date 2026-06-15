@@ -3,7 +3,6 @@ Tests for tet.util.base64 module - Base64 and CrockfordBase32 codecs.
 """
 
 import pytest
-
 from tet.util.base64 import Base64, CrockfordBase32
 
 
@@ -126,8 +125,11 @@ class TestCrockfordBase32:
         """Test that encoding never produces O, I, or L."""
         # Encode various strings and check they don't contain confusing chars
         test_strings = [
-            b"a", b"test", b"longer string here",
-            b"1234567890", b"special!@#$%"
+            b"a",
+            b"test",
+            b"longer string here",
+            b"1234567890",
+            b"special!@#$%",
         ]
         for test_str in test_strings:
             encoded = CrockfordBase32.encode(test_str)
