@@ -5,7 +5,14 @@ Introduction
 What is Tet?
 ============
 
-Tet is an "unearthly intelligent batteries-included application framework built on Pyramid." It extends the robust Pyramid web framework with additional utilities, security features, and developer conveniences that make building web applications more productive and secure.
+Tet is an "unearthly intelligent batteries-included application framework built
+on Pyramid." It extends the robust Pyramid web framework with additional
+utilities, security features, and developer conveniences that make building web
+applications more productive and secure.
+
+Tet does not replace Pyramid — it *extends* it. Every Tet feature is an
+ordinary Pyramid include or directive, so you can adopt as much or as little of
+Tet as you like and remain fully compatible with the Pyramid ecosystem.
 
 Core Philosophy
 ===============
@@ -13,114 +20,117 @@ Core Philosophy
 Tet follows these core principles:
 
 **Batteries Included**
-  Tet provides commonly needed functionality out of the box, reducing the need to find and integrate multiple third-party packages.
+  Tet provides commonly needed functionality out of the box, reducing the need
+  to find and integrate multiple third-party packages.
 
 **Security First**
-  Security features like CSRF protection and safe JSON serialization are enabled by default and designed to prevent common vulnerabilities.
+  Security features like CSRF protection and safe JSON serialization are enabled
+  by default and designed to prevent common vulnerabilities.
 
 **Pyramid Compatible**
-  Tet extends rather than replaces Pyramid, maintaining full compatibility with existing Pyramid applications and ecosystem.
+  Tet extends rather than replaces Pyramid, maintaining full compatibility with
+  existing Pyramid applications and ecosystem.
 
 **Developer Friendly**
-  Enhanced development experience with better error handling, type hints, and comprehensive documentation.
+  Enhanced development experience with better error handling, type hints, and
+  comprehensive documentation.
 
 Key Features Overview
-====================
+=====================
 
-Enhanced Security
------------------
+Application Assembly
+--------------------
 
-Tet provides several security enhancements:
+* **App factory**: the ``application_factory`` decorator and
+  ``create_configurator`` helper wire up a configured application with sensible
+  defaults. See :doc:`configuration`.
+* **Dependency injection**: request-scoped services via ``pyramid_di``, exposed
+  through ``tet.services``. See :doc:`services`.
+* **Views and viewlets**: enhanced ``view_config``, class-based controllers, and
+  a composable viewlet system for reusable template fragments. See :doc:`views`
+  and :doc:`viewlets`.
 
-* **CSRF Protection**: Automatically enabled CSRF protection for forms
-* **Authorization Policies**: Enhanced authorization with request-aware policies
-* **Safe JSON Serialization**: Prevents XSS attacks when embedding JSON in HTML
-* **SQL Injection Prevention**: Proper exception handling in SQLAlchemy factories
+Rendering and Templating
+------------------------
 
-JSON Handling
-------------
+* **Tonnikala templates**: a fast templating renderer with ``$`` interpolation.
+  See :doc:`templating`.
+* **Safe JSON**: XSS-safe JSON serialization with custom type adapters for
+  SQLAlchemy and datetime objects. See :doc:`json`.
+* **Internationalization**: translation and pluralization helpers wired into
+  requests and templates. See :doc:`i18n`.
+* **Static assets**: cache-breaking static views so browsers always pick up new
+  asset versions. See :doc:`static`.
 
-Tet includes advanced JSON handling capabilities:
+Security
+--------
 
-* **XSS Prevention**: Automatic escaping of dangerous characters for inline JavaScript
-* **Custom Type Adapters**: Built-in support for SQLAlchemy and datetime objects
-* **Safe Serialization**: Unicode and HTML-safe JSON output
+* **CSRF Protection**: automatically enabled CSRF protection.
+* **Authorization Policies**: request-aware authorization policies.
+* **Safe serialization**: prevents XSS when embedding JSON in HTML.
 
-SQLAlchemy Integration
----------------------
+See :doc:`security`.
 
-Enhanced database support:
+Data and Utilities
+------------------
 
-* **Root Factories**: Custom traversal root factories with proper exception handling
-* **Session Management**: Enhanced session handling patterns
-* **Type Safety**: Proper conversion of SQL exceptions to appropriate HTTP errors
-
-Utility Modules
---------------
-
-Comprehensive utility modules:
-
-* **Cryptography**: Password hashing and security utilities
-* **Collections**: Enhanced collection types and utilities
-* **Path Handling**: File and path manipulation utilities
-* **Export Functions**: Data export and serialization helpers
+* **SQLAlchemy integration**: root factories that convert SQL lookup errors into
+  ``KeyError`` for clean traversal, plus session helpers. See :doc:`sqlalchemy`.
+* **Utility modules**: cryptography, Base64/Crockford Base32, collections, path
+  handling, and more. See :doc:`utilities`.
+* **Decorators**: small helpers such as ``deprecated`` and ``reify_attr``. See
+  :doc:`decorators`.
 
 Framework Integration
-====================
+=====================
 
 Tet integrates with the broader Python web ecosystem:
 
-* **Pyramid**: Built on top of Pyramid's solid foundation
-* **SQLAlchemy**: Enhanced ORM integration
-* **pyramid_di**: Dependency injection with request-scoped services
-* **Passlib**: Secure password handling
+* **Pyramid**: built on top of Pyramid's solid foundation.
+* **SQLAlchemy**: enhanced ORM integration.
+* **pyramid_di**: dependency injection with request-scoped services.
+* **Passlib**: secure password handling.
 
 Architecture
-===========
+============
 
-Tet uses a modular architecture where each component can be included independently:
+Tet uses a modular architecture where each component can be included
+independently:
 
 .. code-block:: python
 
     from pyramid.config import Configurator
 
-    def main():
-        with Configurator() as config:
+    def main(global_config, **settings):
+        with Configurator(settings=settings) as config:
             # Include only the Tet features you need
-            config.include('tet.security.csrf')
-            config.include('tet.renderers.json')
-            config.include('tet.security.authorization')
+            config.include("tet.security.csrf")
+            config.include("tet.renderers.json")
+            config.include("tet.security.authorization")
 
             # Your application configuration
             # ...
 
             return config.make_wsgi_app()
 
-This modular approach allows you to adopt Tet features gradually and only include what your application needs.
+This modular approach lets you adopt Tet features gradually and include only
+what your application needs. For a higher-level entry point that wires the
+common features together, see the ``application_factory`` decorator in
+:doc:`configuration`.
 
-Version History
-==============
+Requirements
+============
 
-**Version 0.4.1** (Current)
-  * Request-scoped services with pyramid_di integration
-  * Enhanced SQLAlchemy root factory
-  * Improved namespace package support
-  * Python 3.6+ compatibility
+* **Python**: 3.8 or newer.
+* **Pyramid**: 1.9 or newer.
+* Core dependencies: ``pyramid``, ``passlib``, ``sqlalchemy``, ``pyramid_di``.
 
-**Version 0.4.0**
-  * Replace zodb integration
-  * pyramid_di integration improvements
-  * Various bug fixes
-
-**Earlier Versions**
-  * Initial namespace package conversion
-  * SQLAlchemy factory improvements
-  * Package renamed to 'tet'
+Tet is currently at version **0.5.0** and is tested on Python 3.8 through 3.14.
 
 Getting Help
-===========
+============
 
-* **Documentation**: This comprehensive documentation covers all aspects of Tet
-* **Source Code**: Available on GitHub (if public repository exists)
-* **Issues**: Report bugs and feature requests through the issue tracker
-* **Community**: Connect with other Tet users and contributors
+* **Documentation**: this documentation covers the framework in depth — see the
+  :doc:`tutorials <../tutorials/index>` for step-by-step walkthroughs.
+* **Source Code**: https://github.com/tetframework/tet
+* **Issues**: report bugs and feature requests through the issue tracker.

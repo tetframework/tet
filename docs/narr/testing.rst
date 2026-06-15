@@ -1,493 +1,444 @@
-=========
+=======
 Testing
-=========
+=======
 
-Tet applications can be thoroughly tested using pytest and various testing utilities. This chapter covers testing patterns, fixtures, and best practices for Tet applications.
+Tet applications and the Tet framework itself are tested with `pytest
+<https://docs.pytest.org/>`_. This chapter documents the test layout actually
+used in this project (Tet 0.5.0, Python 3.8+), the fixtures that ship in
+``tests/conftest.py``, and practical patterns for testing your own Tet
+applications.
 
-Testing Framework
-================
+Running the Tests
+=================
 
-Tet applications use pytest as the primary testing framework with additional utilities for web application testing.
+Install Tet together with its test dependencies in editable mode and run
+``pytest``::
 
-Basic Test Setup
----------------
+    # Test dependencies only (pytest, pytest-cov)
+    pip install -e '.[test]'
+
+    # Full development toolchain (pytest, pytest-cov, black, ruff, mypy)
+    pip install -e '.[dev]'
+
+    # Run the whole suite
+    pytest
+
+The project configures pytest in ``pyproject.toml`` under
+``[tool.pytest.ini_options]``. The relevant settings are::
+
+    [tool.pytest.ini_options]
+    testpaths = ["tests"]
+    python_files = ["test_*.py", "*_test.py"]
+    addopts = "-ra -q --strict-markers"
+    markers = [
+        "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+        "integration: marks tests as integration tests",
+    ]
+
+Because ``testpaths`` is set to ``tests``, a bare ``pytest`` invocation
+collects only the ``tests/`` directory. ``--strict-markers`` means every
+marker must be declared in ``markers`` (above) or collection fails, so use the
+declared markers rather than inventing new ones.
+
+Two markers are available:
+
+``slow``
+  Mark long-running tests. Deselect them with ``pytest -m "not slow"``.
+
+``integration``
+  Mark integration tests. Run only these with ``pytest -m integration``.
 
 .. code-block:: python
 
-    # conftest.py
     import pytest
+
+    @pytest.mark.slow
+    def test_expensive_operation():
+        ...
+
+    @pytest.mark.integration
+    def test_full_request_cycle(app):
+        ...
+
+Coverage is available through ``pytest-cov`` (installed by both the ``test``
+and ``dev`` extras)::
+
+    pytest --cov=tet --cov-report=term-missing
+
+Built-in Fixtures
+=================
+
+The shared ``tests/conftest.py`` provides a small set of fixtures used
+throughout the suite. They are all function-scoped.
+
+``pyramid_config``
+  A real :class:`pyramid.config.Configurator` with ``config.begin()`` already
+  called; ``config.end()`` runs automatically on teardown. Use it to test
+  ``includeme`` functions and configuration directives.
+
+``pyramid_request``
+  A :class:`pyramid.testing.DummyRequest` whose ``registry`` attribute is a
+  :class:`unittest.mock.Mock`.
+
+``pyramid_request_with_json``
+  Like ``pyramid_request`` but with ``request.json_body`` set to an empty
+  ``dict``.
+
+``mock_db_session``
+  A :class:`unittest.mock.Mock` with ``query``, ``add``, ``commit``,
+  ``rollback`` and ``flush`` attributes pre-created as mocks.
+
+``mock_model``
+  A :class:`unittest.mock.Mock` with ``__tablename__`` set to
+  ``"test_model"``.
+
+The actual definitions look like this:
+
+.. code-block:: python
+
+    # tests/conftest.py
+    from unittest.mock import Mock
+
+    import pytest
+    from pyramid import testing
     from pyramid.config import Configurator
-    from pyramid.testing import setUp, tearDown
 
-    @pytest.fixture(scope='function')
-    def config():
-        """Pyramid configurator for testing."""
-        config = setUp()
-        config.include('tet.renderers.json')
+
+    @pytest.fixture
+    def pyramid_config():
+        config = Configurator()
+        config.begin()
         yield config
-        tearDown()
+        config.end()
 
-    @pytest.fixture(scope='function')
-    def request(config):
-        """Mock request object for testing."""
-        from pyramid.testing import DummyRequest
-        request = DummyRequest()
-        request.registry = config.registry
+
+    @pytest.fixture
+    def pyramid_request():
+        request = testing.DummyRequest()
+        request.registry = Mock()
         return request
+
+
+    @pytest.fixture
+    def mock_db_session():
+        session = Mock()
+        session.query = Mock()
+        session.add = Mock()
+        session.commit = Mock()
+        session.rollback = Mock()
+        session.flush = Mock()
+        return session
+
+Testing ``includeme`` Functions
+===============================
+
+Most Tet modules expose an ``includeme(config)`` entry point. The
+``pyramid_config`` fixture makes these easy to exercise. For example, the CSRF
+module sets ``require_csrf=True``:
+
+.. code-block:: python
+
+    # tests/test_security_csrf.py
+    from unittest.mock import Mock
+
+    from tet.security.csrf import includeme
+
+
+    def test_includeme_sets_csrf_defaults(pyramid_config):
+        pyramid_config.set_default_csrf_options = Mock()
+
+        includeme(pyramid_config)
+
+        pyramid_config.set_default_csrf_options.assert_called_once_with(
+            require_csrf=True
+        )
 
 Testing Views
 =============
 
-Testing Pyramid views with Tet enhancements.
-
-Basic View Testing
------------------
+Pyramid views can be called directly with a dummy request. Use the
+``pyramid_request`` fixture rather than constructing a request by hand:
 
 .. code-block:: python
 
-    # test_views.py
-    import pytest
-    from pyramid.testing import DummyRequest
+    # tests/test_views.py
     from myapp.views import home_view
 
-    def test_home_view():
-        request = DummyRequest()
-        response = home_view(request)
 
-        assert response['message'] == 'Hello, World!'
+    def test_home_view(pyramid_request):
+        response = home_view(pyramid_request)
+        assert response["message"] == "Hello, World!"
 
-JSON View Testing
-----------------
-
-Test views that use Tet's JSON renderer:
+When a view reads JSON from the request body, use
+``pyramid_request_with_json`` and set the body content you need:
 
 .. code-block:: python
 
-    def test_api_view(config, request):
-        from myapp.views import api_view
+    def test_api_view(pyramid_request_with_json):
+        pyramid_request_with_json.json_body = {"name": "example"}
 
-        # Configure JSON renderer
-        config.include('tet.renderers.json')
+        from myapp.views import create_view
 
-        # Test the view
-        result = api_view(request)
+        result = create_view(pyramid_request_with_json)
+        assert result["created"] is True
 
-        assert 'data' in result
-        assert isinstance(result['data'], list)
+Testing the JSON Renderer
+=========================
 
-Integration Testing
-==================
+Tet's JSON renderer lives in :mod:`tet.renderers.json`. The public surface is:
 
-Testing complete request/response cycles.
+``construct_default_renderer(renderer_factory=JSON, **renderer_args)``
+  Builds a Pyramid :class:`pyramid.renderers.JSON` renderer pre-loaded with
+  adapters for :class:`datetime.datetime`, :class:`datetime.date`, and (when
+  SQLAlchemy is installed) SQLAlchemy keyed tuples.
 
-WebTest Integration
-------------------
+``hook_json_renderer(config, *, renderer, name="json")``
+  Registers a renderer under a name and records it in the per-registry
+  renderer registry.
+
+``add_json_adapter(config, *, for_, adapter, renderer="json")``
+  Adds a type adapter to a named, already-registered renderer.
+
+``includeme(config)``
+  Registers the default renderer and adds the ``add_json_renderer`` and
+  ``add_json_adapter`` directives.
+
+Note that ``construct_default_renderer`` returns a Pyramid ``JSON`` renderer
+*factory* instance. It is not a plain callable that turns data into a string;
+to actually render, Pyramid calls it with renderer ``info`` to obtain the
+render function. The simplest way to test serialization is therefore to test
+the adapters and helpers directly, or to register the renderer on a
+configurator. To check that the default adapters are present:
 
 .. code-block:: python
 
-    # conftest.py
+    # tests/test_renderers_json.py
+    from tet.renderers.json import construct_default_renderer
+
+
+    def test_default_renderer_constructs():
+        renderer = construct_default_renderer()
+        # It is a Pyramid JSON renderer factory instance with adapters added.
+        assert renderer is not None
+
+To test the configuration directives, use ``pyramid_config`` and inspect the
+per-registry renderer registry that ``hook_json_renderer`` maintains:
+
+.. code-block:: python
+
+    from unittest.mock import Mock
+
+    from tet.renderers.json import hook_json_renderer
+
+
+    def test_hook_json_renderer_default_name(pyramid_config):
+        renderer = Mock()
+        pyramid_config.add_renderer = Mock()
+        pyramid_config.registry.tet_json_renderers = {}
+
+        hook_json_renderer(pyramid_config, renderer=renderer)
+
+        pyramid_config.add_renderer.assert_called_once_with("json", renderer)
+        assert pyramid_config.registry.tet_json_renderers["json"] is renderer
+
+Testing Safe JSON Serialization
+===============================
+
+:func:`tet.util.json.js_safe_dumps` escapes characters that are dangerous
+inside inline ``<script>`` blocks. Unlike the renderer above, it *is* a plain
+callable that returns a string:
+
+.. code-block:: python
+
+    # tests/test_util_json.py
+    from tet.util.json import js_safe_dumps
+
+
+    def test_escapes_less_than():
+        result = js_safe_dumps("test<script>")
+        assert result == '"test\\u003cscript\\u003e"'
+        assert "<" not in result
+        assert ">" not in result
+
+The ``<``, ``>`` and ``/`` characters are escaped to their ``\uXXXX`` forms,
+so the output is safe to embed directly in HTML.
+
+Testing the SQLAlchemy Root Factory
+===================================
+
+:class:`tet.sqlalchemy.factory.SQLARootFactory` converts SQLAlchemy lookup
+exceptions into :class:`KeyError`. It can be tested with the
+``pyramid_request`` fixture and a mocked ``supplier`` method, mirroring the
+real test suite:
+
+.. code-block:: python
+
+    # tests/test_sqlalchemy_factory.py
+    from unittest.mock import Mock
+
     import pytest
-    from webtest import TestApp
-    from myapp import main
+    from sqlalchemy.orm.exc import NoResultFound
 
-    @pytest.fixture(scope='session')
-    def app():
-        """Create test application."""
-        settings = {
-            'sqlalchemy.url': 'sqlite:///:memory:',
-            'debug': True,
-        }
-        app = main({}, **settings)
-        return TestApp(app)
+    from tet.sqlalchemy.factory import SQLARootFactory
 
-    # test_integration.py
-    def test_home_page(app):
-        response = app.get('/')
-        assert response.status_code == 200
-        assert b'Hello' in response.body
 
-    def test_api_endpoint(app):
-        response = app.get('/api/users')
-        assert response.status_code == 200
-        assert response.content_type == 'application/json'
+    def test_getitem_success(pyramid_request):
+        factory = SQLARootFactory(pyramid_request)
+        expected = Mock()
+        factory.supplier = Mock(return_value=expected)
 
-Database Testing
-===============
+        assert factory["test_id"] is expected
+        factory.supplier.assert_called_once_with("test_id")
 
-Testing with SQLAlchemy and database operations.
 
-Database Fixtures
-----------------
+    def test_getitem_raises_keyerror_on_noresult(pyramid_request):
+        factory = SQLARootFactory(pyramid_request)
+        factory.supplier = Mock(side_effect=NoResultFound("No result found"))
+
+        with pytest.raises(KeyError) as exc_info:
+            _ = factory["missing_id"]
+
+        # NoResultFound is preserved as the cause of the KeyError.
+        assert isinstance(exc_info.value.__cause__, NoResultFound)
+
+The factory also converts :class:`sqlalchemy.orm.exc.MultipleResultsFound` and
+:class:`sqlalchemy.exc.DataError` into ``KeyError`` in the same way.
+
+Testing with a Real Database
+============================
+
+The built-in ``mock_db_session`` fixture is enough for unit tests that only
+need to assert how a session is used. When you need real persistence, define
+your own SQLAlchemy fixtures in your application's ``conftest.py``:
 
 .. code-block:: python
 
-    # conftest.py
+    # conftest.py (in your application)
     import pytest
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+
     from myapp.models import Base
 
-    @pytest.fixture(scope='session')
-    def engine():
-        """Create test database engine."""
-        return create_engine('sqlite:///:memory:', echo=False)
 
-    @pytest.fixture(scope='session')
+    @pytest.fixture(scope="session")
+    def engine():
+        return create_engine("sqlite:///:memory:")
+
+
+    @pytest.fixture(scope="session")
     def tables(engine):
-        """Create all tables."""
         Base.metadata.create_all(engine)
         yield
         Base.metadata.drop_all(engine)
 
-    @pytest.fixture(scope='function')
+
+    @pytest.fixture
     def dbsession(engine, tables):
-        """Create database session for each test."""
         Session = sessionmaker(bind=engine)
         session = Session()
         yield session
         session.rollback()
         session.close()
 
-Testing Root Factories
-----------------------
+Integration Testing with WebTest
+================================
 
-Test Tet's SQLAlchemy root factories:
-
-.. code-block:: python
-
-    def test_root_factory_success(dbsession):
-        from myapp.models import User
-        from myapp.root import UserRootFactory
-        from pyramid.testing import DummyRequest
-
-        # Create test data
-        user = User(name='Test User', email='test@example.com')
-        dbsession.add(user)
-        dbsession.commit()
-
-        # Test root factory
-        request = DummyRequest()
-        request.dbsession = dbsession
-
-        root = UserRootFactory(request)
-        found_user = root[str(user.id)]
-
-        assert found_user == user
-
-    def test_root_factory_not_found(dbsession):
-        from myapp.root import UserRootFactory
-        from pyramid.testing import DummyRequest
-
-        request = DummyRequest()
-        request.dbsession = dbsession
-
-        root = UserRootFactory(request)
-
-        with pytest.raises(KeyError):
-            root['nonexistent']
-
-Security Testing
-===============
-
-Testing Tet's security features.
-
-CSRF Testing
------------
+For full request/response cycles, build your WSGI application and wrap it in a
+`WebTest <https://docs.pylonsproject.org/projects/webtest/>`_ ``TestApp``.
+WebTest is not a dependency of Tet, so add it to your own test requirements.
 
 .. code-block:: python
 
-    def test_csrf_protection(app):
-        # GET request should work
-        response = app.get('/form')
+    # conftest.py (in your application)
+    import pytest
+    from webtest import TestApp
+
+    from myapp import main
+
+
+    @pytest.fixture(scope="session")
+    def app():
+        settings = {"sqlalchemy.url": "sqlite:///:memory:"}
+        return TestApp(main({}, **settings))
+
+
+    # test_integration.py
+    import pytest
+
+
+    @pytest.mark.integration
+    def test_home_page(app):
+        response = app.get("/")
         assert response.status_code == 200
 
-        # POST without CSRF token should fail
-        with pytest.raises(Exception):  # CSRF error
-            app.post('/form', {'data': 'test'})
-
-        # POST with CSRF token should work
-        # (Implementation depends on your CSRF setup)
-
-Authorization Testing
---------------------
-
-.. code-block:: python
-
-    def test_authorization_policy():
-        from myapp.security import MyAuthorizationPolicy
-        from pyramid.testing import DummyRequest
-
-        policy = MyAuthorizationPolicy()
-        request = DummyRequest()
-
-        # Test permission checking
-        result = policy.permits(
-            request=request,
-            context=None,
-            principals=['user:123'],
-            permission='edit'
-        )
-
-        assert result is True  # or False, depending on logic
-
-JSON Testing
-===========
-
-Testing Tet's JSON functionality.
-
-JSON Serialization Testing
---------------------------
-
-.. code-block:: python
-
-    def test_json_serialization(config):
-        from tet.renderers.json import construct_default_renderer
-        from datetime import datetime
-
-        renderer = construct_default_renderer()
-
-        data = {
-            'timestamp': datetime.now(),
-            'count': 42
-        }
-
-        result = renderer(data, {})
-
-        # Should be valid JSON
-        import json
-        parsed = json.loads(result)
-        assert 'timestamp' in parsed
-        assert parsed['count'] == 42
-
-Safe JSON Testing
-----------------
-
-.. code-block:: python
-
-    def test_safe_json_serialization():
-        from tet.util.json import js_safe_dumps
-
-        dangerous_data = {
-            'script': '</script><script>alert("XSS")</script>'
-        }
-
-        safe_json = js_safe_dumps(dangerous_data)
-
-        # Should escape dangerous characters
-        assert '<' not in safe_json
-        assert '\\u003c' in safe_json
-
 Mock Testing
-===========
+============
 
-Using mocks for isolated testing.
-
-Service Mocking
---------------
+Use :mod:`unittest.mock` to isolate views and services from their
+dependencies. The ``mock_db_session`` fixture provides a ready-made mocked
+session:
 
 .. code-block:: python
 
-    from unittest.mock import Mock, patch
+    from unittest.mock import Mock
 
-    def test_view_with_service():
-        from myapp.views import user_list_view
-        from pyramid.testing import DummyRequest
 
-        # Mock the database service
-        mock_session = Mock()
-        mock_session.query.return_value.all.return_value = [
-            Mock(id=1, name='User 1'),
-            Mock(id=2, name='User 2'),
+    def test_view_with_service(pyramid_request, mock_db_session):
+        mock_db_session.query.return_value.all.return_value = [
+            Mock(id=1, name="User 1"),
+            Mock(id=2, name="User 2"),
         ]
+        pyramid_request.find_service = Mock(return_value=mock_db_session)
 
-        request = DummyRequest()
-        request.find_service = Mock(return_value=mock_session)
+        from myapp.views import user_list_view
 
-        result = user_list_view(request)
+        result = user_list_view(pyramid_request)
+        assert len(result["users"]) == 2
 
-        assert len(result['users']) == 2
-
-External Service Mocking
------------------------
+Patch external calls at the point where they are used:
 
 .. code-block:: python
 
-    @patch('myapp.services.external_api_call')
+    from unittest.mock import patch
+
+
+    @patch("myapp.services.external_api_call")
     def test_external_service(mock_api_call):
-        mock_api_call.return_value = {'status': 'success'}
+        mock_api_call.return_value = {"status": "success"}
 
         from myapp.services import process_external_data
 
-        result = process_external_data('test_data')
-
-        assert result['status'] == 'success'
-        mock_api_call.assert_called_once_with('test_data')
-
-Fixture Patterns
-================
-
-Common fixture patterns for Tet applications.
-
-User Authentication Fixtures
-----------------------------
-
-.. code-block:: python
-
-    @pytest.fixture
-    def authenticated_user(dbsession):
-        """Create an authenticated user for testing."""
-        from myapp.models import User
-
-        user = User(
-            username='testuser',
-            email='test@example.com',
-            is_active=True
-        )
-        dbsession.add(user)
-        dbsession.commit()
-        return user
-
-    @pytest.fixture
-    def authenticated_request(request, authenticated_user):
-        """Create request with authenticated user."""
-        request.user = authenticated_user
-        return request
-
-Application State Fixtures
---------------------------
-
-.. code-block:: python
-
-    @pytest.fixture
-    def sample_data(dbsession):
-        """Create sample data for testing."""
-        from myapp.models import User, Post
-
-        users = [
-            User(username=f'user{i}', email=f'user{i}@example.com')
-            for i in range(3)
-        ]
-
-        for user in users:
-            dbsession.add(user)
-
-        dbsession.commit()
-
-        posts = [
-            Post(title=f'Post {i}', content=f'Content {i}', author=users[0])
-            for i in range(5)
-        ]
-
-        for post in posts:
-            dbsession.add(post)
-
-        dbsession.commit()
-
-        return {'users': users, 'posts': posts}
-
-Performance Testing
-==================
-
-Testing performance characteristics of your application.
-
-Response Time Testing
---------------------
-
-.. code-block:: python
-
-    import time
-
-    def test_api_response_time(app):
-        start_time = time.time()
-        response = app.get('/api/users')
-        end_time = time.time()
-
-        assert response.status_code == 200
-        assert end_time - start_time < 1.0  # Should respond within 1 second
-
-Load Testing with Locust
-------------------------
-
-.. code-block:: python
-
-    # locustfile.py
-    from locust import HttpUser, task, between
-
-    class WebsiteUser(HttpUser):
-        wait_time = between(1, 3)
-
-        @task
-        def index_page(self):
-            self.client.get("/")
-
-        @task(3)
-        def api_users(self):
-            self.client.get("/api/users")
+        result = process_external_data("test_data")
+        assert result["status"] == "success"
+        mock_api_call.assert_called_once_with("test_data")
 
 Test Organization
-================
+=================
 
-Organizing tests for maintainability.
-
-Directory Structure
-------------------
-
-.. code-block::
+The Tet test suite keeps a flat ``tests/`` directory whose module names mirror
+the package layout, for example::
 
     tests/
-    ├── conftest.py           # Shared fixtures
-    ├── unit/                 # Unit tests
-    │   ├── test_models.py
-    │   ├── test_views.py
-    │   └── test_utilities.py
-    ├── integration/          # Integration tests
-    │   ├── test_api.py
-    │   └── test_web.py
-    ├── functional/           # Functional tests
-    │   └── test_workflows.py
-    └── performance/          # Performance tests
-        └── test_load.py
+    ├── conftest.py                      # Shared fixtures
+    ├── test_renderers_json.py
+    ├── test_security_authorization.py
+    ├── test_security_csrf.py
+    ├── test_sqlalchemy_factory.py
+    ├── test_util_base64.py
+    ├── test_util_collections.py
+    ├── test_util_crypt.py
+    └── test_util_json.py
 
-Test Categories
---------------
-
-**Unit Tests**
-  Test individual functions and classes in isolation.
-
-**Integration Tests**
-  Test how components work together.
-
-**Functional Tests**
-  Test complete user workflows.
-
-**Performance Tests**
-  Test response times and resource usage.
+Tests are grouped into classes (``class TestSomething:``) with descriptive
+method names. Because ``python_files`` is ``["test_*.py", "*_test.py"]``, both
+``test_foo.py`` and ``foo_test.py`` are collected.
 
 Continuous Integration
-=====================
+======================
 
-Running tests in CI environments.
-
-pytest Configuration
--------------------
-
-.. code-block:: ini
-
-    # pytest.ini
-    [tool:pytest]
-    testpaths = tests
-    python_files = test_*.py
-    python_classes = Test*
-    python_functions = test_*
-    addopts =
-        --strict-markers
-        --disable-warnings
-        --cov=myapp
-        --cov-report=html
-        --cov-report=term-missing
-
-GitHub Actions Example
----------------------
+A minimal GitHub Actions workflow that installs the test extra and runs the
+suite across the supported Python versions:
 
 .. code-block:: yaml
 
@@ -501,52 +452,42 @@ GitHub Actions Example
         runs-on: ubuntu-latest
         strategy:
           matrix:
-            python-version: [3.8, 3.9, '3.10', 3.11]
+            python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
 
         steps:
-        - uses: actions/checkout@v4
-        - name: Set up Python ${{ matrix.python-version }}
-          uses: actions/setup-python@v4
-          with:
-            python-version: ${{ matrix.python-version }}
-
-        - name: Install dependencies
-          run: |
-            python -m pip install --upgrade pip
-            pip install -e .[dev]
-
-        - name: Run tests
-          run: pytest
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
+            with:
+              python-version: ${{ matrix.python-version }}
+          - run: |
+              python -m pip install --upgrade pip
+              pip install -e '.[test]'
+          - run: pytest
 
 Best Practices
-=============
+==============
 
-**Use Fixtures Liberally**
-  Create reusable fixtures for common test data and setup.
+**Reuse the built-in fixtures**
+  Prefer ``pyramid_config``, ``pyramid_request`` and ``mock_db_session`` over
+  re-creating equivalents in every test module.
 
-**Test Edge Cases**
-  Test not just the happy path, but error conditions and edge cases.
+**Respect strict markers**
+  Only ``slow`` and ``integration`` are declared. With ``--strict-markers`` an
+  undeclared marker fails collection; declare new markers in ``pyproject.toml``
+  before using them.
 
-**Mock External Dependencies**
-  Mock external APIs and services to make tests reliable and fast.
+**Test the public API**
+  Import from documented entry points such as
+  :func:`tet.util.json.js_safe_dumps` and
+  :class:`tet.sqlalchemy.factory.SQLARootFactory`.
 
-**Use Meaningful Test Names**
-  Test function names should clearly describe what is being tested.
+**Test edge cases**
+  Cover error conditions explicitly, for example the ``KeyError`` conversion in
+  ``SQLARootFactory``.
 
-**Keep Tests Independent**
-  Each test should be able to run independently of others.
+**Keep tests independent**
+  Each test should run on its own; the function-scoped fixtures help enforce
+  this.
 
-**Test Database Interactions**
-  Use transactions and rollbacks to keep database tests isolated.
-
-**Use Parametrized Tests**
-  Use pytest's parametrize decorator to test multiple inputs efficiently.
-
-**Measure Coverage**
-  Use coverage tools to ensure adequate test coverage.
-
-**Test Security Features**
-  Specifically test security-related functionality like CSRF and authorization.
-
-**Performance Benchmarks**
-  Include basic performance tests to catch regressions early.
+**Measure coverage**
+  Use ``pytest --cov=tet`` (via ``pytest-cov``) to find untested code paths.
