@@ -34,3 +34,9 @@ nosetests.xml
 .project
 .pydevproject
 .vscode
+venv*
+
+# local scratch / virtualenvs
+test_env/
+test_project/
+CLAUDE_from_form_processor.md

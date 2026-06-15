@@ -1,2 +1,0 @@
-from pyramid.response import *
-

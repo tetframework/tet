@@ -1,0 +1,10 @@
+# Documentation requirements for ReadTheDocs
+sphinx>=5.0.0
+sphinx_rtd_theme>=1.0.0
+sphinx-copybutton>=0.5.0
+
+# Tet and its dependencies for autodoc
+pyramid>=1.9
+passlib
+sqlalchemy
+pyramid_di
