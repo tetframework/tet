@@ -39,6 +39,10 @@ maketrans = bytes.maketrans
 class BaseCodec:
     """Base class for encoding codecs."""
 
+    #: Number of bits each encoded character carries (log2 of the alphabet
+    #: size). Subclasses with power-of-two alphabets set this explicitly.
+    bits_per_char = None
+
     @classmethod
     def generate_characters(cls, length):
         """Generate a random string of ``length`` characters in this codec's
@@ -46,7 +50,7 @@ class BaseCodec:
 
         Random bytes are generated with :func:`secrets.token_bytes`, run
         through the codec's own :meth:`encode`, and truncated to ``length``.
-        Each encoded character carries ``bits_per_char`` bits, so
+        Each encoded character carries ``cls.bits_per_char`` bits, so
         ``ceil(length * bits_per_char / 8)`` input bytes always encode to at
         least ``length`` data characters. Padding (if any) only trails the
         data, so the truncated slice never includes it.
@@ -54,8 +58,7 @@ class BaseCodec:
         if length <= 0:
             return ""
 
-        bits_per_char = (len(cls.chars) - 1).bit_length()
-        n_bytes = (length * bits_per_char + 7) // 8
+        n_bytes = (length * cls.bits_per_char + 7) // 8
         encoded = cls.encode(secrets.token_bytes(n_bytes))
         if isinstance(encoded, bytes):
             encoded = encoded.decode("ascii")
@@ -66,7 +69,8 @@ class BaseCodec:
 class Base64(BaseCodec):
     """Standard Base64 encoding."""
 
-    chars = (string.ascii_letters + string.digits + "+/").encode()
+    chars = string.ascii_letters + string.digits + "+/"
+    bits_per_char = 6
     padding = True
 
     @classmethod
@@ -107,6 +111,7 @@ class CrockfordBase32(BaseCodec):
     """
 
     chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    bits_per_char = 5
     padding = False
 
     @classmethod

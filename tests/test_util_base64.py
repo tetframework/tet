@@ -38,16 +38,20 @@ class TestBase64:
         result = Base64.generate_characters(length)
         assert isinstance(result, str)
         assert len(result) == length
-        allowed = set(Base64.chars.decode())
+        allowed = set(Base64.chars)
         assert set(result) <= allowed  # no '=' padding, only alphabet
 
     # If the byte count were under-provisioned, the final char would be the
     # zero-padded tail symbol carrying only a few real bits, so it could only
     # take a restricted subset of the alphabet. A full char ranges over all 64.
+    def test_bits_per_char_matches_alphabet(self):
+        """bits_per_char must equal log2 of the alphabet size."""
+        assert 2**Base64.bits_per_char == len(Base64.chars)
+
     @pytest.mark.parametrize("length", [1, 2, 5, 17])
     def test_last_character_is_full_entropy(self, length):
         """The final kept character must carry full bits (whole alphabet)."""
-        alphabet = set(Base64.chars.decode())
+        alphabet = set(Base64.chars)
         last_chars = {Base64.generate_characters(length)[-1] for _ in range(3000)}
         assert last_chars == alphabet
 
@@ -131,6 +135,10 @@ class TestCrockfordBase32:
         assert isinstance(result, str)
         assert len(result) == length
         assert set(result) <= set(CrockfordBase32.chars)
+
+    def test_bits_per_char_matches_alphabet(self):
+        """bits_per_char must equal log2 of the alphabet size."""
+        assert 2**CrockfordBase32.bits_per_char == len(CrockfordBase32.chars)
 
     @pytest.mark.parametrize("length", [1, 2, 3, 9])
     def test_last_character_is_full_entropy(self, length):
