@@ -54,7 +54,7 @@ class RateLimitAttempt(RateLimitAttemptMixin, Base):
 ```
 
 `TokenMixin` stores hashed refresh tokens.  `UserPasswordMixin` (from
-`tet.sqlalchemy.password`) gives you `password` (a bcrypt-hashed column) and
+`tet.sqlalchemy.password`) gives you `password` (a hashed column via passlib) and
 `validate_password()`.
 
 `TOTPUsedCode` and `RateLimitAttempt` are optional.  Mark them `UNLOGGED` for
@@ -203,7 +203,7 @@ authentication (the default permission is `"view"`).
 
 TOTP support is built in.  The flow from the client's perspective:
 
-1. **Setup** -- `POST /mfa/app/setup` with `{"method_type": "TOTP"}`.  Returns
+1. **Setup** -- `POST /mfa/app/setup` with `{"method_type": "totp"}`.  Returns
    a `secret` and a `qr_code` (base64-encoded SVG).  The user scans the QR
    code with their authenticator app.
 

@@ -262,7 +262,7 @@ class TetMultiFactorAuthenticationService(RequestScopedBaseService):
         )
 
     @staticmethod
-    def generate_qr_img(user: tp.Any, mfa_secret: str, data: tp.Union[TOTPData]) -> str:
+    def generate_qr_img(user: tp.Any, mfa_secret: str, data: TOTPData) -> str:
         otp_uri = pyotp.totp.TOTP(mfa_secret).provisioning_uri(
             name=user.display_name, issuer_name=data.issuer
         )

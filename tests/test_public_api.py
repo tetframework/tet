@@ -50,10 +50,13 @@ def test_tet_security_exports():
         MultiFactorAuthenticationMethodMixin,
         NO_PERMISSION_REQUIRED,
         PasswordChangeData,
+        RateLimitAttemptMixin,
         TetAuthService,
         TetMultiFactorAuthenticationService,
+        TetRateLimitService,
         TetTokenService,
         TOTPData,
+        TOTPUsedCodeMixin,
         TokenAuthenticationPolicy,
         TokenMixin,
     )

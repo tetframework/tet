@@ -1,6 +1,25 @@
 # Changes
 
 
+2026-06-14  Antti Haapala  <antti.haapala@interjektio.fi>
+
+    * 0.6a1: Add ``tet.security`` module with JWT-based authentication,
+      refresh tokens, TOTP multi-factor authentication, login rate limiting,
+      password management, and Pyramid security policy integration.
+    * New SQLAlchemy model mixins: ``TokenMixin``,
+      ``MultiFactorAuthenticationMethodMixin``, ``TOTPUsedCodeMixin``,
+      ``RateLimitAttemptMixin``.
+    * Pyramid 2.0 compatibility for security/authorization imports.
+    * Auth views registered via ``config.include("tet.security.authentication")``.
+    * Event system for login, logout, password change, MFA, and token
+      revocation (``tet.security.events``).
+    * TOTP replay protection via UNLOGGED tables.
+    * Login rate limiting by client IP.
+    * Breached password checking via Have I Been Pwned API (k-anonymity).
+    * Drop Python 3.8, 3.9 support. Require Python >= 3.10.
+    * Remove unused ``structlog`` dependency from ``[auth]`` extras.
+
+
 2026-05-28  Antti Haapala  <antti.haapala@anttipatterns.com>
 
     * 0.5.0: ``tet.services`` now re-exports ``service``,

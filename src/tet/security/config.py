@@ -70,8 +70,8 @@ class JWTRegisteredClaims:
                 iss="my-auth-service",
                 sub="user123",
                 aud="my-api.example.com",
-                exp=datetime.utcnow() + timedelta(hours=1),
-                iat=datetime.utcnow(),
+                exp=datetime.now(UTC) + timedelta(hours=1),
+                iat=datetime.now(UTC),
                 jti="unique-token-id-456"
             )
 
@@ -98,7 +98,7 @@ class JWTRegisteredClaims:
         Returns:
             dict[str, Any]: A dictionary representation of the registered claims.
         """
-        return {k: v for k, v in dataclasses.asdict(self).items() if v is not None}
+        return {k: v for k, v in dataclasses.asdict(self).items() if v is not None and k != "leeway"}
 
 
 @dataclasses.dataclass
