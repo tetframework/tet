@@ -1,8 +1,13 @@
+import os
+
 import pytest
 from sqlalchemy import create_engine, text
 
 TARGET_MODULE = "test_authentication.py"
-DB_URL = "postgresql+psycopg2://test_tet:test_tet@localhost:5432/test_tet"
+DB_URL = os.environ.get(
+    "TET_TEST_DB_URL",
+    "postgresql+psycopg2://test_tet:test_tet@localhost:5432/test_tet",
+)
 
 
 def pytest_collection_modifyitems(config, items):

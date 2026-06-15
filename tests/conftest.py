@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import typing as tp
 
 import pytest
@@ -26,7 +27,10 @@ from tet.security.authentication import (
 from tet.view import view_config
 
 DB_NAME = "test_tet"
-DB_URL = f"postgresql+psycopg2://test_tet:test_tet@localhost:5432/{DB_NAME}"
+DB_URL = os.environ.get(
+    "TET_TEST_DB_URL",
+    f"postgresql+psycopg2://test_tet:test_tet@localhost:5432/{DB_NAME}",
+)
 
 logger = logging.getLogger(__name__)
 

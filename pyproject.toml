@@ -43,6 +43,8 @@ security = [
     "pyotp",
     "qrcode>=8.0,<9.0",
     "requests>=2.28",
+    "pyramid_tm",
+    "zope.sqlalchemy",
 ]
 dev = [
     "tet[security]",
