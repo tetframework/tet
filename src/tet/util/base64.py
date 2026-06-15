@@ -118,7 +118,7 @@ class CrockfordBase32(BaseCodec):
     def encode(cls, string, normalize=True, validate=False):
         """Encode bytes to Crockford Base32."""
         if isinstance(string, str):
-            string = string.decode()
+            string = string.encode()
 
         return (
             base64.b32encode(string).translate(_std_b32_to_crockford_b32, b"=").decode()

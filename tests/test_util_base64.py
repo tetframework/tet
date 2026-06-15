@@ -93,6 +93,14 @@ class TestCrockfordBase32:
         decoded = CrockfordBase32.decode(encoded)
         assert decoded == original
 
+    def test_encode_str_input(self):
+        """A str input is UTF-8 encoded, matching its bytes encoding."""
+        assert CrockfordBase32.encode("hello") == CrockfordBase32.encode(b"hello")
+        # Non-ASCII should round-trip through UTF-8.
+        assert (
+            CrockfordBase32.decode(CrockfordBase32.encode("héllo")) == "héllo".encode()
+        )
+
     def test_no_padding(self):
         """Test that CrockfordBase32 doesn't use padding."""
         result = CrockfordBase32.encode(b"test")
