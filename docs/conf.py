@@ -69,8 +69,23 @@ def autodoc_skip_member(app, what, name, obj, skip, options):
     return skip
 
 
+def autodoc_process_signature(app, what, name, obj, options, signature, return_annotation):
+    from pyramid_di import reify_attr
+
+    if isinstance(obj, reify_attr):
+        wrapped = obj.wrapped
+        annotations = getattr(wrapped, "__annotations__", {})
+        ret = annotations.get("return")
+        if ret:
+            type_name = getattr(ret, "__name__", None) or getattr(ret, "__qualname__", str(ret))
+            return ("", f" :class:`{type_name}`")
+        return ("", None)
+    return None
+
+
 def setup(app):
     app.connect("autodoc-skip-member", autodoc_skip_member)
+    app.connect("autodoc-process-signature", autodoc_process_signature)
 
 
 # -- Options for HTML output ----------------------------------------------
