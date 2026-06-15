@@ -41,6 +41,16 @@ class TestBase64:
         allowed = set(Base64.chars.decode())
         assert set(result) <= allowed  # no '=' padding, only alphabet
 
+    # If the byte count were under-provisioned, the final char would be the
+    # zero-padded tail symbol carrying only a few real bits, so it could only
+    # take a restricted subset of the alphabet. A full char ranges over all 64.
+    @pytest.mark.parametrize("length", [1, 2, 5, 17])
+    def test_last_character_is_full_entropy(self, length):
+        """The final kept character must carry full bits (whole alphabet)."""
+        alphabet = set(Base64.chars.decode())
+        last_chars = {Base64.generate_characters(length)[-1] for _ in range(3000)}
+        assert last_chars == alphabet
+
     def test_generate_characters_different(self):
         """Test that generated characters are random."""
         # Two long random strings should virtually never collide.
@@ -121,6 +131,15 @@ class TestCrockfordBase32:
         assert isinstance(result, str)
         assert len(result) == length
         assert set(result) <= set(CrockfordBase32.chars)
+
+    @pytest.mark.parametrize("length", [1, 2, 3, 9])
+    def test_last_character_is_full_entropy(self, length):
+        """The final kept character must carry full bits (whole alphabet)."""
+        alphabet = set(CrockfordBase32.chars)
+        last_chars = {
+            CrockfordBase32.generate_characters(length)[-1] for _ in range(3000)
+        }
+        assert last_chars == alphabet
 
     def test_chars_attribute(self):
         """Test the chars attribute contains correct Crockford alphabet."""
