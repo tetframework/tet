@@ -1,6 +1,14 @@
 # Changes
 
 
+2026-06-16  Antti Haapala  <antti.haapala@anttipatterns.com>
+
+    * 0.6a1: first 0.6 alpha. Migrated to a ``src/`` layout and replaced
+      ``setup.py``/``setup.cfg`` with ``pyproject.toml``. PyPI publishing now
+      uses OIDC trusted publishing via ``release.yml`` (no API token). Fixed
+      ``Base64``/``CrockfordBase32.generate_characters`` to use ``secrets``.
+
+
 2026-05-28  Antti Haapala  <antti.haapala@anttipatterns.com>
 
     * 0.5.0: ``tet.services`` now re-exports ``service``,

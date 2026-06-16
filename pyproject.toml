@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tet"
-version = "0.5.0"
+version = "0.6a1"
 description = "Unearthly intelligent batteries-included application framework built on Pyramid"
 readme = "README.md"
 requires-python = ">=3.8"
