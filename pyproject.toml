@@ -129,3 +129,18 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[tool.rstcheck]
+report_level = "WARNING"
+# Sphinx autodoc directives used in the auto-generated docs/api/*.rst stubs;
+# rstcheck does not know extension directives, so ignore them.
+ignore_directives = [
+    "automodule",
+    "autoclass",
+    "autofunction",
+    "autoattribute",
+    "automethod",
+    "autodata",
+    "autoexception",
+    "autosummary",
+]

@@ -1,6 +1,6 @@
-===================
+=========
 Tutorials
-===================
+=========
 
 This section contains step-by-step tutorials for using Tet framework features.
 

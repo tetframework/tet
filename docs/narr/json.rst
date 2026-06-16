@@ -27,7 +27,7 @@ Standard JSON serialization can be unsafe when embedded in HTML:
 
 When embedded in HTML, this could execute malicious JavaScript:
 
-.. code-block:: html
+.. code-block:: text
 
     <!-- DANGEROUS - DON'T DO THIS -->
     <script>
@@ -50,7 +50,7 @@ Tet's ``js_safe_dumps`` function escapes dangerous characters:
     # Result: {"message": "\\u003c/script\\u003e\\u003cscript\\u003ealert('XSS')\\u003c/script\\u003e"}
 
 Escaped Characters
------------------
+------------------
 
 ``js_safe_dumps`` escapes these dangerous characters:
 
@@ -62,7 +62,7 @@ Escaped Characters
 * ``\u2029`` → ``\\u2029`` (Paragraph separator - can break JavaScript)
 
 Usage in Templates
------------------
+------------------
 
 Use the safe JSON in your templates:
 
@@ -72,7 +72,7 @@ Use the safe JSON in your templates:
         var userData = ${safe_json|n};
     </script>
 
-The ``|n`` filter prevents double-escaping in template engines like Chameleon.
+The ``|n`` filter outputs the value without HTML-escaping in the Tonnikala template engine, which is what you want since ``js_safe_dumps`` has already produced a string that is safe to embed in a ``<script>`` element.
 
 Enhanced JSON Renderer
 ======================
@@ -159,7 +159,7 @@ Use the ``add_json_adapter`` directive to register custom type adapters:
             return config.make_wsgi_app()
 
 Multiple Renderers
------------------
+------------------
 
 You can register multiple JSON renderers with different names:
 
@@ -191,12 +191,12 @@ Then use it in your views:
         return {'data': MyModel.query.all()}
 
 JSON in Views
-============
+=============
 
 Using JSON renderers in your Pyramid views is straightforward.
 
 Basic JSON Response
-------------------
+-------------------
 
 .. code-block:: python
 
@@ -209,7 +209,7 @@ Basic JSON Response
         }
 
 Handling JSON Input
-------------------
+-------------------
 
 For processing JSON request bodies:
 
@@ -228,7 +228,7 @@ For processing JSON request bodies:
         return {'result': result}
 
 Error Handling
--------------
+--------------
 
 Handle JSON-related errors gracefully:
 
@@ -246,7 +246,7 @@ Handle JSON-related errors gracefully:
         return process_data(data)
 
 Performance Considerations
-=========================
+==========================
 
 **Caching JSON Responses**
   Consider caching frequently requested JSON data:
@@ -283,7 +283,7 @@ Performance Considerations
         }
 
 Best Practices
-=============
+==============
 
 **Always Use Safe Serialization**
   When embedding JSON in HTML, always use ``js_safe_dumps``.

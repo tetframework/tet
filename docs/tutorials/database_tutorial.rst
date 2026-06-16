@@ -1,6 +1,6 @@
-==================
+=================
 Database Tutorial
-==================
+=================
 
 This tutorial covers using Tet's enhanced SQLAlchemy integration, including root factories, session management, and database best practices.
 
@@ -10,7 +10,7 @@ Database Setup
 Setting up SQLAlchemy with Tet's enhancements.
 
 Basic Configuration
-------------------
+-------------------
 
 Create your database models and configuration:
 
@@ -71,7 +71,7 @@ Create your database models and configuration:
             }
 
 Database Engine Setup
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -105,7 +105,7 @@ Request-Scoped Sessions with Tet
 Tet provides automatic database session management through pyramid_di and pyramid_tm.
 
 Tet's SQLAlchemy Integration
----------------------------
+----------------------------
 
 .. code-block:: python
 
@@ -135,7 +135,7 @@ Tet's SQLAlchemy Integration
         config.scan('views')
 
 Settings Configuration
----------------------
+----------------------
 
 Configure your database in settings (e.g., `development.ini`):
 
@@ -150,7 +150,7 @@ Configure your database in settings (e.g., `development.ini`):
     sqlalchemy.pool_size = 10
 
 Automatic Features Included
---------------------------
+---------------------------
 
 When you use `config.setup_sqlalchemy()`, Tet automatically configures:
 
@@ -161,12 +161,12 @@ When you use `config.setup_sqlalchemy()`, Tet automatically configures:
 5. **Session cleanup**: Sessions closed automatically after request
 
 Root Factories
-=============
+==============
 
 Use Tet's ``SQLARootFactory`` for traversal-based applications.
 
 Basic Root Factory
------------------
+------------------
 
 .. code-block:: python
 
@@ -259,12 +259,12 @@ Configure traversal with root factories:
             return config.make_wsgi_app()
 
 Database Views
-=============
+==============
 
 Create views that work with Tet's database integration.
 
 User Management Views
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -351,7 +351,7 @@ User Management Views
             return {'user': user, 'message': 'User created successfully'}
 
 Relationship Handling
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -379,7 +379,7 @@ Relationship Handling
         }
 
 Complex Queries
---------------
+---------------
 
 .. code-block:: python
 
@@ -428,12 +428,12 @@ Complex Queries
         return {'posts': result}
 
 Transaction Management
-=====================
+======================
 
 Tet automatically handles database transactions through pyramid_tm.
 
 Automatic Transaction Management
-------------------------------
+--------------------------------
 
 With Tet's SQLAlchemy setup, transactions are handled automatically:
 
@@ -452,7 +452,7 @@ With Tet's SQLAlchemy setup, transactions are handled automatically:
         # - Rolled back on exceptions or error responses (4xx, 5xx)
 
 Working with Automatic Transactions
-----------------------------------
+-----------------------------------
 
 Your views don't need to manage transactions manually:
 
@@ -483,7 +483,7 @@ Your views don't need to manage transactions manually:
         return {'message': 'Operation completed successfully', 'user': user}
 
 Handling Transaction Rollbacks
------------------------------
+------------------------------
 
 To trigger a rollback, raise an HTTP exception:
 
@@ -508,7 +508,7 @@ To trigger a rollback, raise an HTTP exception:
         return {'user': user}
 
 Bulk Operations
---------------
+---------------
 
 .. code-block:: python
 
@@ -543,7 +543,7 @@ Bulk Operations
             raise HTTPBadRequest(f"Bulk import failed: {str(e)}")
 
 Database Migrations
-==================
+===================
 
 Handle database schema changes.
 
@@ -612,7 +612,7 @@ Testing Database Code
 Test your database interactions thoroughly.
 
 Database Test Setup
-------------------
+-------------------
 
 .. code-block:: python
 
@@ -734,7 +734,7 @@ Performance Optimization
 Optimize database performance.
 
 Query Optimization
------------------
+------------------
 
 .. code-block:: python
 
@@ -754,7 +754,7 @@ Query Optimization
         return {'posts': posts}
 
 Connection Pooling
------------------
+------------------
 
 .. code-block:: python
 
@@ -787,7 +787,7 @@ Query Caching
         pass
 
 Best Practices
-=============
+==============
 
 **Session Management**
 - Always use request-scoped sessions

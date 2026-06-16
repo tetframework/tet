@@ -52,7 +52,7 @@ For AJAX requests, include the CSRF token in headers:
     });
 
 Enhanced Authorization
-=====================
+======================
 
 Tet provides an enhanced authorization system that gives authorization policies access to the current request object.
 
@@ -75,30 +75,40 @@ Traditional Pyramid authorization policies receive limited context. Tet's ``INew
             return True
 
         def principals_allowed_by_permission(self, request, context, permission):
-            # Implementation depends on your authorization logic
-            return {'admin', 'user'}
+            # This method is optional. If you do not use
+            # pyramid.security.principals_allowed_by_permission, you may
+            # raise NotImplementedError here instead.
+            raise NotImplementedError()
 
 Using Enhanced Authorization
----------------------------
+----------------------------
 
 Register your authorization policy with Tet:
 
 .. code-block:: python
 
     from pyramid.config import Configurator
-    from tet.security.authorization import INewAuthorizationPolicy
 
     def main():
         with Configurator() as config:
             config.include('tet.security.authorization')
+            # set_authorization_policy is added by the include above
             config.set_authorization_policy(MyAuthorizationPolicy())
 
             return config.make_wsgi_app()
 
-The authorization wrapper automatically adapts your ``INewAuthorizationPolicy`` to work with Pyramid's authorization system.
+Including ``tet.security.authorization`` adds the
+``config.set_authorization_policy`` directive. When you pass an object
+providing ``INewAuthorizationPolicy`` (or a dotted name resolving to one),
+it is wrapped in ``AuthorizationPolicyWrapper``, which implements Pyramid's
+``IAuthorizationPolicy``. The wrapper retrieves the current request via
+``pyramid.threadlocal.get_current_request`` and passes it as the first
+argument to your policy's ``permits`` and
+``principals_allowed_by_permission`` methods. Objects that do not provide
+``INewAuthorizationPolicy`` are passed through to Pyramid unchanged.
 
 SQLAlchemy Security
-==================
+===================
 
 Tet provides secure SQLAlchemy integration through the ``SQLARootFactory`` class.
 
@@ -188,7 +198,7 @@ When using Tet, follow these security best practices:
   Regularly update Tet and its dependencies to get security fixes.
 
 Security Considerations
-======================
+=======================
 
 **Session Security**
   Configure secure session settings in production:
