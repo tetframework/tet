@@ -165,7 +165,7 @@ If neither succeeds, a ``KeyError`` is raised, which Pyramid turns into a 404.
 
 .. code-block:: python
 
-    class __getitem__(self, name):
+    def __getitem__(self, name):
         if hasattr(self, "_lookup"):
             try:
                 return self._lookup(name)
