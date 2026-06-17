@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tet"
-version = "0.6a1"
+version = "0.6a2"
 description = "Unearthly intelligent batteries-included application framework built on Pyramid"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -143,3 +143,18 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[tool.rstcheck]
+report_level = "WARNING"
+# Sphinx autodoc directives used in the auto-generated docs/api/*.rst stubs;
+# rstcheck does not know extension directives, so ignore them.
+ignore_directives = [
+    "automodule",
+    "autoclass",
+    "autofunction",
+    "autoattribute",
+    "automethod",
+    "autodata",
+    "autoexception",
+    "autosummary",
+]

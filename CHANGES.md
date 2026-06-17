@@ -1,11 +1,12 @@
 # Changes
 
 
-2026-06-14  Antti Haapala  <antti.haapala@interjektio.fi>
+2026-06-17  Antti Haapala  <antti.haapala@anttipatterns.com>
 
-    * 0.6a1: Add ``tet.security`` module with JWT-based authentication,
+    * 0.6a2: Add ``tet.security`` module with JWT-based authentication,
       refresh tokens, TOTP multi-factor authentication, login rate limiting,
       password management, and Pyramid security policy integration.
+      Installable via the ``tet[security]`` extra.
     * New SQLAlchemy model mixins: ``TokenMixin``,
       ``MultiFactorAuthenticationMethodMixin``, ``TOTPUsedCodeMixin``,
       ``RateLimitAttemptMixin``.
@@ -17,7 +18,14 @@
     * Login rate limiting by client IP.
     * Breached password checking via Have I Been Pwned API (k-anonymity).
     * Drop Python 3.8, 3.9 support. Require Python >= 3.10.
-    * Remove unused ``structlog`` dependency from ``[auth]`` extras.
+
+
+2026-06-16  Antti Haapala  <antti.haapala@anttipatterns.com>
+
+    * 0.6a1: first 0.6 alpha. Migrated to a ``src/`` layout and replaced
+      ``setup.py``/``setup.cfg`` with ``pyproject.toml``. PyPI publishing now
+      uses OIDC trusted publishing via ``release.yml`` (no API token). Fixed
+      ``Base64``/``CrockfordBase32.generate_characters`` to use ``secrets``.
 
 
 2026-05-28  Antti Haapala  <antti.haapala@anttipatterns.com>

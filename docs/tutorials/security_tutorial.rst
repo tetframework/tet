@@ -1,16 +1,16 @@
-==================
+=================
 Security Tutorial
-==================
+=================
 
 This tutorial covers implementing security features in Tet applications, including CSRF protection, authorization policies, and safe data handling.
 
 CSRF Protection Setup
-====================
+=====================
 
 Cross-Site Request Forgery (CSRF) protection is essential for web applications. Tet makes it easy to implement.
 
 Basic CSRF Protection
---------------------
+---------------------
 
 Enable CSRF protection in your application:
 
@@ -89,12 +89,12 @@ Working with CSRF Tokens
         return {'status': 'success'}
 
 Authorization System
-===================
+====================
 
 Tet provides an enhanced authorization system that gives policies access to the request object.
 
 Creating an Authorization Policy
--------------------------------
+--------------------------------
 
 .. code-block:: python
 
@@ -145,7 +145,7 @@ Creating an Authorization Policy
             return allowed
 
 Registering the Authorization Policy
------------------------------------
+------------------------------------
 
 .. code-block:: python
 
@@ -197,12 +197,12 @@ Using Authorization in Views
         return {'post': post}
 
 Authentication Integration
-=========================
+==========================
 
 Combine Tet's authorization with authentication systems.
 
 Using pyramid_jwt
-----------------
+-----------------
 
 .. code-block:: python
 
@@ -335,12 +335,12 @@ Input Validation and Sanitization
         return {'status': 'updated'}
 
 Session Security
-===============
+================
 
 Configure secure session settings for production.
 
 Session Configuration
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -362,12 +362,12 @@ Session Configuration
             return config.make_wsgi_app()
 
 Rate Limiting
-============
+=============
 
 Implement rate limiting for API endpoints.
 
 Simple Rate Limiting
--------------------
+--------------------
 
 .. code-block:: python
 
@@ -410,7 +410,7 @@ Simple Rate Limiting
         return {'data': 'sensitive_information'}
 
 Security Headers
-===============
+================
 
 Add security headers to your responses.
 
@@ -473,7 +473,7 @@ Testing CSRF Protection
         # (Extract token from form or session)
 
 Testing Authorization
---------------------
+---------------------
 
 .. code-block:: python
 

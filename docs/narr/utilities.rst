@@ -2,454 +2,285 @@
 Utilities
 =========
 
-Tet provides a comprehensive set of utility modules to handle common tasks in web applications.
+Tet provides a small set of focused utility modules under ``tet.util`` to
+handle common tasks in web applications.
 
 Cryptographic Utilities
-=======================
+========================
 
-The ``tet.util.crypt`` module provides secure password hashing and cryptographic utilities.
+The ``tet.util.crypt`` module provides password hashing built on top of
+passlib's SHA-256 crypt scheme.
 
 Password Hashing
 ----------------
 
-For secure password storage, Tet integrates with passlib:
+Two functions are exposed: ``crypt`` to hash a password and ``verify`` to
+check a plaintext password against an existing hash. Both accept either
+``str`` or ``bytes`` for the password.
 
 .. code-block:: python
 
-    from tet.util.crypt import hash_password, verify_password
+    from tet.util.crypt import crypt, verify
 
     # Hash a password
-    hashed = hash_password('user_password')
+    hashed = crypt("my_secret_password")
 
     # Verify a password
-    is_valid = verify_password('user_password', hashed)
+    if verify("my_secret_password", hashed):
+        print("Password is correct!")
 
-The password utilities use industry-standard algorithms and automatically handle salting and timing-attack prevention.
+Hashing uses ``passlib.hash.sha256_crypt`` (exposed as the module-level
+``password_hash``), which handles salting automatically. For SQLAlchemy
+models, consider ``tet.sqlalchemy.password.UserPasswordMixin``, which
+integrates this functionality directly into your model.
 
-Secure Random Generation
-------------------------
+Base64 and Crockford Base32 Utilities
+======================================
 
-Generate cryptographically secure random values:
+The ``tet.util.base64`` module provides two codec classes, ``Base64`` and
+``CrockfordBase32``, both deriving from ``BaseCodec``. Each codec exposes
+``encode``, ``decode`` and ``normalize`` classmethods, plus a
+``generate_characters`` classmethod inherited from ``BaseCodec``.
 
-.. code-block:: python
-
-    from tet.util.crypt import generate_token, generate_key
-
-    # Generate a secure token (for CSRF, API keys, etc.)
-    token = generate_token(32)  # 32 bytes = 256 bits
-
-    # Generate a secure key for encryption
-    key = generate_key(algorithm='AES256')
-
-Base64 Utilities
-================
-
-The ``tet.util.base64`` module provides enhanced base64 encoding/decoding with additional safety features.
-
-URL-Safe Encoding
------------------
+Standard Base64
+---------------
 
 .. code-block:: python
 
-    from tet.util.base64 import url_safe_encode, url_safe_decode
+    from tet.util.base64 import Base64
 
-    data = b"Hello, World!"
+    encoded = Base64.encode(b"hello")   # returns bytes
+    decoded = Base64.decode(encoded)    # returns b"hello"
 
-    # Encode for safe use in URLs
-    encoded = url_safe_encode(data)
+``Base64.encode`` wraps :func:`base64.b64encode` and returns ``bytes``;
+``Base64.decode`` wraps :func:`base64.b64decode`. ``Base64.normalize`` is a
+no-op that returns its argument unchanged. The class attributes are
+``Base64.chars`` (a ``str`` of the 64-character alphabet,
+``string.ascii_letters + string.digits + "+/"``), ``bits_per_char = 6`` and
+``padding = True``.
 
-    # Decode back to original
-    decoded = url_safe_decode(encoded)
-
-The URL-safe encoding uses base64url format (RFC 4648) that replaces ``+`` and ``/`` with ``-`` and ``_`` respectively, making it safe for use in URLs without encoding.
-
-Padding Handling
+Crockford Base32
 ----------------
 
+Crockford's Base32 is a human-friendly encoding that avoids ambiguous
+characters (``0``/``O`` and ``1``/``I``/``L``). It is case-insensitive on
+decode and tolerates common transcription mistakes.
+
 .. code-block:: python
 
-    from tet.util.base64 import encode_no_padding, decode_with_padding
+    from tet.util.base64 import CrockfordBase32
 
-    # Encode without padding characters
-    encoded = encode_no_padding(data)
+    encoded = CrockfordBase32.encode(b"hello")  # returns str
+    decoded = CrockfordBase32.decode(encoded)    # returns bytes
 
-    # Decode with automatic padding restoration
-    decoded = decode_with_padding(encoded)
+    # Ambiguous characters are normalized: O -> 0, I/L -> 1
+    CrockfordBase32.normalize("O1L")  # "011"
+
+``CrockfordBase32.encode`` accepts ``str`` or ``bytes`` and returns a ``str``
+with any ``=`` padding stripped. ``CrockfordBase32.decode`` normalizes its
+input by default (pass ``normalize=False`` to skip that), re-adds the
+mandatory padding, and returns ``bytes``. ``CrockfordBase32.normalize``
+translates the ambiguous characters and upper-cases the input. The class
+attributes are ``CrockfordBase32.chars``
+(``"0123456789ABCDEFGHJKMNPQRSTVWXYZ"``, a ``str``), ``bits_per_char = 5``
+and ``padding = False``.
+
+Generating Random Characters
+----------------------------
+
+``BaseCodec.generate_characters`` produces a random string of the requested
+length using the codec's own alphabet, drawn from a cryptographically secure
+source:
+
+.. code-block:: python
+
+    from tet.util.base64 import Base64, CrockfordBase32
+
+    # 16 random Base64 characters
+    token = Base64.generate_characters(16)
+
+    # 26 random Crockford Base32 characters (good for IDs / tokens)
+    ident = CrockfordBase32.generate_characters(26)
+
+Internally it generates ``ceil(length * bits_per_char / 8)`` random bytes
+with :func:`secrets.token_bytes`, runs them through the codec's ``encode``,
+and truncates the result to ``length`` characters. Because any padding only
+trails the data, the truncated slice never contains padding. A non-positive
+``length`` returns an empty string.
 
 Collection Utilities
 ====================
 
-The ``tet.util.collections`` module provides enhanced collection types and utilities.
+The ``tet.util.collections`` module provides a single helper, ``flatten``.
 
-Enhanced Dictionaries
----------------------
+Flattening Nested Iterables
+---------------------------
 
-.. code-block:: python
-
-    from tet.util.collections import AttrDict, DefaultAttrDict
-
-    # Dictionary with attribute access
-    config = AttrDict({
-        'database': {
-            'host': 'localhost',
-            'port': 5432
-        }
-    })
-
-    # Access via attributes
-    host = config.database.host
-
-    # Or traditional dictionary access
-    port = config['database']['port']
-
-Nested Operations
-----------------
+``flatten`` is a generator that recursively flattens an arbitrarily nested
+iterable. ``str`` and ``bytes`` are treated as atomic values and are never
+exploded into their characters.
 
 .. code-block:: python
 
-    from tet.util.collections import deep_merge, safe_get
+    from tet.util.collections import flatten
 
-    # Deep merge dictionaries
-    dict1 = {'a': {'b': 1}}
-    dict2 = {'a': {'c': 2}}
-    merged = deep_merge(dict1, dict2)
-    # Result: {'a': {'b': 1, 'c': 2}}
+    nested = [1, [2, 3, [4, 5]], 6]
+    list(flatten(nested))            # [1, 2, 3, 4, 5, 6]
 
-    # Safe nested access
-    value = safe_get(config, 'database.host', default='localhost')
+    with_strings = ["hello", ["world", ["!"]]]
+    list(flatten(with_strings))      # ["hello", "world", "!"]
 
 Path Utilities
 ==============
 
-The ``tet.util.path`` module provides file and path manipulation utilities.
+The ``tet.util.path`` module provides ``caller_package``, used internally by
+Tet's configuration system to determine which package called into the
+framework.
 
-Path Operations
----------------
-
-.. code-block:: python
-
-    from tet.util.path import safe_join, ensure_dir, normalize_path
-
-    # Safely join paths (prevents directory traversal)
-    safe_path = safe_join('/var/uploads', user_filename)
-
-    # Ensure directory exists
-    ensure_dir('/var/logs/app')
-
-    # Normalize path for consistent handling
-    normalized = normalize_path(user_input_path)
-
-File Operations
----------------
+Determining the Calling Package
+-------------------------------
 
 .. code-block:: python
 
-    from tet.util.path import atomic_write, backup_file
+    from tet.util.path import caller_package
 
-    # Atomic file writing (prevents corruption)
-    with atomic_write('/important/file.txt') as f:
-        f.write(data)
+    # The package module of the code that called the current function
+    pkg = caller_package()
 
-    # Create backup before modifying
-    backup_path = backup_file('/important/file.txt')
-    # Returns path to backup file
+    # Skip additional modules when walking the stack
+    pkg = caller_package(ignored_modules=("myframework.helpers",))
 
-Temporary File Handling
------------------------
-
-.. code-block:: python
-
-    from tet.util.path import temp_file, temp_dir
-
-    # Secure temporary file
-    with temp_file(suffix='.json') as tmp:
-        tmp.write(json_data)
-        process_file(tmp.name)
-
-    # Temporary directory
-    with temp_dir() as tmpdir:
-        work_in_directory(tmpdir)
+``caller_package`` walks up the call stack (starting a few frames up, and
+always ignoring ``tet.util.path`` itself), skipping any module whose name is
+in ``ignored_modules``. When it reaches the first non-ignored module it
+returns that module if it is itself a package (its ``__file__`` ends in
+``__init__.py``), otherwise it returns the package that contains the module.
+It builds on Pyramid's ``pyramid.path.caller_module``, which can also be
+overridden via the ``caller_module`` keyword argument for testing.
 
 Export Utilities
 ================
 
-The ``tet.util.export`` module provides data export and serialization functionality.
+The ``tet.util.export`` module provides ``exporter``, a small helper for
+maintaining a module's ``__all__`` via a decorator.
 
-Data Export
------------
+Maintaining ``__all__``
+-----------------------
 
-.. code-block:: python
-
-    from tet.util.export import export_csv, export_json, export_xml
-
-    data = [
-        {'name': 'Alice', 'age': 30},
-        {'name': 'Bob', 'age': 25}
-    ]
-
-    # Export to CSV
-    csv_content = export_csv(data)
-
-    # Export to JSON with custom formatting
-    json_content = export_json(data, indent=2, sort_keys=True)
-
-    # Export to XML
-    xml_content = export_xml(data, root_element='users', item_element='user')
-
-Format Conversion
-----------------
+``exporter()`` returns a ``(decorator, list)`` tuple. Bind the list to your
+module's ``__all__`` and apply the decorator to anything you want exported;
+each decorated object's ``__name__`` is appended to ``__all__`` and the object
+is returned unchanged.
 
 .. code-block:: python
 
-    from tet.util.export import convert_format
+    from tet.util.export import exporter
 
-    # Convert between formats
-    xml_data = convert_format(json_data, from_format='json', to_format='xml')
+    export, __all__ = exporter()
 
-Shell Integration
-================
+    @export
+    def my_public_function():
+        pass
 
-The ``tet.util.pshell`` module provides Python shell integration utilities.
+    @export
+    class MyPublicClass:
+        pass
 
-Interactive Shell
------------------
+    def _private_function():
+        pass
 
-.. code-block:: python
+    # __all__ == ["my_public_function", "MyPublicClass"]
 
-    from tet.util.pshell import make_shell_env
+Shell (pshell) Utilities
+========================
 
-    # Create shell environment with application context
-    env = make_shell_env(request)
+The ``tet.util.pshell`` module provides snippet support for the Pyramid
+``pshell`` interactive environment. A *snippet* is a ``.py`` file that defines
+a ``run()`` function, which can then be invoked interactively.
 
-    # Available variables in shell:
-    # - request: Current request object
-    # - root: Application root
-    # - registry: Application registry
-
-Development Utilities
+Configuring Snippets
 --------------------
 
+Point the ``tet.snippets`` setting at a directory of snippet files in your INI
+file:
+
+.. code-block:: ini
+
+    [app:main]
+    tet.snippets = %(here)s/snippets
+
+A snippet file ``snippets/create_user.py`` looks like:
+
 .. code-block:: python
 
-    from tet.util.pshell import debug_request, inspect_object
+    def run(username, email):
+        from myapp.models import User
+        session = env["request"].dbsession
+        user = User(username=username, email=email)
+        session.add(user)
+        return user
 
-    # Debug request information
-    debug_info = debug_request(request)
+Using Snippets in pshell
+------------------------
 
-    # Inspect object properties
-    object_info = inspect_object(some_object, include_private=False)
+The ``Snippets`` factory builds a snippets-access object from an environment
+mapping (the same ``env`` exposed in ``pshell``). Each ``.py`` file in the
+configured directory becomes an attribute that, when called, executes that
+file's ``run()`` function in the caller's globals:
+
+.. code-block:: python
+
+    from tet.util.pshell import Snippets
+
+    snippets = Snippets(env)
+
+    # List available snippets
+    snippets()
+
+    # Invoke snippets/create_user.py's run() function
+    snippets.create_user("john", "john@example.com")
 
 JSON Utilities
 ==============
 
-Beyond the safe serialization covered in the JSON chapter, ``tet.util.json`` provides additional utilities.
+The ``tet.util.json`` module provides ``js_safe_dumps`` for serializing data
+to JSON that is safe to embed directly inside an HTML ``<script>`` element.
 
-Pretty Printing
----------------
+Safe Embedding in HTML/JavaScript
+---------------------------------
 
-.. code-block:: python
-
-    from tet.util.json import pretty_print, colorized_print
-
-    # Pretty print JSON data
-    pretty_print(complex_data)
-
-    # Colorized output for debugging
-    colorized_print(data, style='dark')
-
-JSON Schema Validation
----------------------
+``js_safe_dumps`` serializes its argument with :func:`json.dumps` and then
+escapes the characters that are dangerous in an HTML/JS context. The escaped
+characters are ``<``, ``>``, ``/`` and ``&`` (XSS-prevention), as well as the
+Unicode line/paragraph separators `` `` and `` `` (which would
+otherwise break JavaScript string literals).
 
 .. code-block:: python
 
-    from tet.util.json import validate_json, create_schema
+    from tet.util.json import js_safe_dumps
 
-    schema = {
-        'type': 'object',
-        'properties': {
-            'name': {'type': 'string'},
-            'age': {'type': 'integer', 'minimum': 0}
-        },
-        'required': ['name']
-    }
+    data = {"name": "<script>alert('xss')</script>"}
+    js_safe_dumps(data)
+    # '{"name": "\\u003cscript\\u003ealert(\'xss\')\\u003c\\u002fscript\\u003e"}'
 
-    # Validate data against schema
-    is_valid, errors = validate_json(user_data, schema)
+In a Tonnikala template, use ``$literal()`` so the already-escaped JSON is not
+double-escaped:
 
-Configuration Utilities
-=======================
+.. code-block:: html
 
-Working with application configuration.
-
-Configuration Loading
---------------------
-
-.. code-block:: python
-
-    from tet.util.config import load_config, merge_configs
-
-    # Load configuration from multiple sources
-    base_config = load_config('config/base.ini')
-    env_config = load_config('config/production.ini')
-
-    # Merge configurations with precedence
-    final_config = merge_configs(base_config, env_config)
-
-Environment Variables
---------------------
-
-.. code-block:: python
-
-    from tet.util.config import get_env_config
-
-    # Load configuration from environment variables
-    config = get_env_config(
-        prefix='MYAPP_',
-        mapping={
-            'DATABASE_URL': 'sqlalchemy.url',
-            'SECRET_KEY': 'session.secret',
-            'DEBUG': ('debug', bool)  # Type conversion
-        }
-    )
-
-Validation Utilities
-===================
-
-Input validation and sanitization helpers.
-
-Data Validation
----------------
-
-.. code-block:: python
-
-    from tet.util.validation import validate_email, validate_url, sanitize_filename
-
-    # Validate email address
-    is_valid_email = validate_email('user@example.com')
-
-    # Validate URL
-    is_valid_url = validate_url('https://example.com')
-
-    # Sanitize filename for safe storage
-    safe_filename = sanitize_filename(user_uploaded_filename)
-
-Form Data Processing
--------------------
-
-.. code-block:: python
-
-    from tet.util.validation import clean_form_data, validate_form
-
-    # Clean and validate form data
-    cleaned_data = clean_form_data(request.POST, {
-        'name': str.strip,
-        'email': str.lower,
-        'age': int
-    })
-
-    # Comprehensive form validation
-    is_valid, errors, cleaned = validate_form(form_data, validation_rules)
-
-Testing Utilities
-================
-
-Utilities to help with testing Tet applications.
-
-Test Helpers
-------------
-
-.. code-block:: python
-
-    from tet.util.testing import make_test_request, create_test_app
-
-    # Create test request with mock data
-    request = make_test_request(
-        method='POST',
-        post_data={'name': 'test'},
-        user_id=123
-    )
-
-    # Create test application
-    app = create_test_app(settings={
-        'sqlalchemy.url': 'sqlite:///:memory:'
-    })
-
-Mock Utilities
---------------
-
-.. code-block:: python
-
-    from tet.util.testing import mock_service, patch_setting
-
-    # Mock application service
-    with mock_service('dbsession', mock_db):
-        result = my_view(request)
-
-    # Temporarily patch application setting
-    with patch_setting('feature.enabled', True):
-        test_feature_behavior()
-
-Performance Utilities
-====================
-
-Tools for monitoring and optimizing performance.
-
-Timing and Profiling
---------------------
-
-.. code-block:: python
-
-    from tet.util.performance import timer, profile_function
-
-    # Time code execution
-    with timer() as t:
-        expensive_operation()
-    print(f"Operation took {t.elapsed:.2f} seconds")
-
-    # Profile function performance
-    @profile_function
-    def my_function():
-        # Function implementation
-        pass
-
-Caching Utilities
-----------------
-
-.. code-block:: python
-
-    from tet.util.performance import cached, cache_key
-
-    # Simple function caching
-    @cached(timeout=300)  # 5 minute cache
-    def expensive_calculation(param):
-        return complex_computation(param)
-
-    # Generate cache keys
-    key = cache_key('user_data', user_id=123, version=2)
+    <script>
+        var config = $literal(js_safe_dumps(config_data));
+    </script>
 
 Best Practices
-=============
+==============
 
-**Security First**
-  Always use the cryptographic utilities for sensitive operations like password hashing.
+**Use the secure codecs for tokens**
+  Prefer ``CrockfordBase32.generate_characters`` / ``Base64.generate_characters``
+  for identifiers and tokens; they draw from :mod:`secrets`.
 
-**Validate Inputs**
-  Use validation utilities to sanitize and validate all user inputs.
+**Hash passwords, never store them**
+  Use ``crypt`` and ``verify`` (or ``UserPasswordMixin``) for password storage.
 
-**Handle Paths Safely**
-  Use path utilities to prevent directory traversal and other path-related security issues.
-
-**Test Thoroughly**
-  Use the testing utilities to create comprehensive tests for your utilities usage.
-
-**Performance Monitoring**
-  Use timing and profiling utilities to identify performance bottlenecks.
-
-**Configuration Management**
-  Use configuration utilities to manage application settings across environments.
-
-**Error Handling**
-  All utility functions include proper error handling and meaningful error messages.
-
-**Documentation**
-  Each utility module includes comprehensive docstrings and examples.
+**Escape JSON destined for HTML**
+  Use ``js_safe_dumps`` whenever JSON is embedded inside a ``<script>`` tag.

@@ -322,7 +322,7 @@ Run the tests::
     pytest test_app.py
 
 Production Configuration
-=======================
+========================
 
 For production deployment, create a proper configuration file.
 

@@ -1,38 +1,46 @@
-=====================
+======================
 SQLAlchemy Integration
-=====================
+======================
 
-Tet provides enhanced SQLAlchemy integration with custom root factories, session management patterns, and proper exception handling.
+Tet provides enhanced SQLAlchemy integration with a custom traversal root
+factory, a simple session/transaction setup keyed on the ``pyramid_di``
+service registry, and a password-hashing mixin for user models.
+
+These features target Tet 0.5.0 and Python 3.8+.
 
 Root Factories
 ==============
 
-Tet's ``SQLARootFactory`` provides a secure and robust foundation for traversal-based applications.
+Tet's ``SQLARootFactory`` provides a robust foundation for traversal-based
+applications by turning common SQLAlchemy lookup failures into ``KeyError``.
 
 Basic Root Factory
 ------------------
 
-The ``SQLARootFactory`` is an abstract base class that handles SQL exceptions properly:
+``SQLARootFactory`` is a base class whose ``__getitem__`` delegates to a
+``supplier`` method that you implement. The constructor takes the current
+request, which is stored as ``self.request``:
 
 .. code-block:: python
 
+    from sqlalchemy.orm import Session
     from tet.sqlalchemy.factory import SQLARootFactory
-    from sqlalchemy.orm.exc import NoResultFound
 
-    class MyRootFactory(SQLARootFactory):
+    class UserFactory(SQLARootFactory):
         def supplier(self, item):
             """Override this method to provide object lookup logic."""
-            session = self.request.dbsession
-            try:
-                return session.query(MyModel).filter_by(id=item).one()
-            except NoResultFound:
-                # This will be converted to KeyError, resulting in 404
-                raise
+            session = self.request.find_service(Session)
+            return session.query(User).filter(User.id == int(item)).one()
+
+When ``supplier`` raises ``MultipleResultsFound``, ``NoResultFound``, or
+``DataError``, ``SQLARootFactory.__getitem__`` re-raises it as
+``KeyError(item)`` (with the original exception chained via ``from``). You do
+not need to catch these exceptions yourself.
 
 Using the Root Factory
 ----------------------
 
-Register your root factory with Pyramid:
+Register your factory with a route (or as the global root factory):
 
 .. code-block:: python
 
@@ -40,94 +48,177 @@ Register your root factory with Pyramid:
 
     def main():
         with Configurator() as config:
-            config.set_root_factory(MyRootFactory)
+            # As a per-route factory
+            config.add_route('user', '/users/{id}', factory=UserFactory)
 
-            # Your routes using traversal
-            config.add_route('item', '/items/{id}')
+            # Or as the global traversal root factory
+            config.set_root_factory(UserFactory)
 
             return config.make_wsgi_app()
 
 Exception Handling
------------------
+------------------
 
-The ``SQLARootFactory`` automatically converts these exceptions to ``KeyError``:
+``SQLARootFactory`` automatically converts these SQLAlchemy exceptions to
+``KeyError``:
 
-* ``NoResultFound``: When a query returns no results
-* ``MultipleResultsFound``: When a unique query finds multiple results
-* ``DataError``: When there are data-related SQL errors (e.g., invalid UUID)
+* ``sqlalchemy.orm.exc.NoResultFound``: when a query returns no results
+* ``sqlalchemy.orm.exc.MultipleResultsFound``: when ``one()`` finds multiple
+  rows
+* ``sqlalchemy.exc.DataError``: when there is a data-related SQL error (for
+  example an invalid value passed to the database)
 
-This conversion results in proper HTTP 404 responses instead of exposing SQL errors to users.
+Because Pyramid traversal treats ``KeyError`` as "not found", this conversion
+yields a clean HTTP 404 response instead of exposing a SQL error to the user.
 
 Advanced Root Factory Example
 -----------------------------
 
-A more sophisticated root factory with caching and multiple model types:
+A more sophisticated factory dispatching on the key shape. Note that you only
+need to handle exceptions that are *not* already mapped (for example
+``ValueError`` from ``int()``); the SQLAlchemy lookup exceptions are mapped for
+you:
 
 .. code-block:: python
 
-    from tet.sqlalchemy.factory import SQLARootFactory
-    from sqlalchemy.orm.exc import NoResultFound
     import re
+
+    from sqlalchemy.orm import Session
+    from tet.sqlalchemy.factory import SQLARootFactory
 
     class ApplicationRoot(SQLARootFactory):
         def supplier(self, item):
-            session = self.request.dbsession
+            session = self.request.find_service(Session)
 
-            # Handle different ID patterns
-            if re.match(r'^\d+$', item):
-                # Numeric ID - look up by primary key
-                try:
-                    return session.query(MyModel).get(int(item))
-                except (ValueError, NoResultFound):
-                    raise
+            if re.fullmatch(r'\d+', item):
+                # Numeric primary key
+                return session.query(MyModel).filter_by(id=int(item)).one()
 
-            elif re.match(r'^[a-f0-9-]{36}$', item):
-                # UUID pattern - look up by UUID
-                try:
-                    return session.query(MyModel).filter_by(uuid=item).one()
-                except NoResultFound:
-                    raise
+            if re.fullmatch(r'[a-f0-9-]{36}', item):
+                # UUID
+                return session.query(MyModel).filter_by(uuid=item).one()
 
-            else:
-                # Try slug lookup
-                try:
-                    return session.query(MyModel).filter_by(slug=item).one()
-                except NoResultFound:
-                    raise
+            # Fall back to slug lookup
+            return session.query(MyModel).filter_by(slug=item).one()
 
 Session Management
 ==================
 
-Tet provides automatic session management through its SQLAlchemy integration.
+Tet provides session and transaction management through the
+``tet.sqlalchemy.simple`` module.
 
 Tet's SQLAlchemy Simple Integration
-----------------------------------
+-----------------------------------
 
-Use Tet's simple SQLAlchemy setup for automatic configuration:
+Including ``tet.sqlalchemy.simple`` adds a ``setup_sqlalchemy`` directive and
+wires up dependency injection and transaction management. The ``includeme``
+performs an availability check for ``sqlalchemy`` (raising ``RuntimeError`` if
+it cannot be imported), includes ``pyramid_di`` and ``pyramid_tm``, and sets
+``tm.manager_hook`` to ``pyramid_tm.explicit_manager``:
 
 .. code-block:: python
 
     from tet.config import application_factory, ALL_FEATURES
     from tet.sqlalchemy.simple import declarative_base
 
-    # Create models using Tet's declarative base
+    # Create models using Tet's declarative base (Alembic-friendly naming)
     Base = declarative_base()
 
     @application_factory(included_features=ALL_FEATURES)
     def main(config):
-        # Include Tet's SQLAlchemy integration
+        # Adds the setup_sqlalchemy directive and includes
+        # pyramid_di and pyramid_tm
         config.include('tet.sqlalchemy.simple')
 
-        # This automatically configures:
-        # - pyramid_di for dependency injection
-        # - pyramid_tm for transaction management
-        # - Request-scoped database sessions
+        # Build the engine from settings (sqlalchemy.* by default) and
+        # register the request-scoped session service
         config.setup_sqlalchemy()
+
+        config.scan()
+
+``declarative_base()`` accepts optional keyword-only ``metadata`` and
+``naming_convention`` arguments; by default it applies an Alembic-friendly
+``DEFAULT_NAMING_CONVENTION`` so autogenerated constraint names are stable
+across database backends.
+
+The ``setup_sqlalchemy`` Directive
+----------------------------------
+
+``setup_sqlalchemy`` is registered as a configurator directive. Its
+keyword-only parameters are:
+
+``settings``
+  Optional settings dictionary used to build the engine. If omitted, the
+  registry settings are used. Mutually exclusive with ``engine``.
+
+``prefix``
+  Settings key prefix passed to ``engine_from_config`` (default
+  ``"sqlalchemy."``).
+
+``engine``
+  An existing SQLAlchemy ``Engine`` to bind the session factory to. Mutually
+  exclusive with ``settings``; supplying both raises ``ValueError``.
+
+``name``
+  An optional alternate name under which to register the session service
+  (useful for binding more than one database). Defaults to ``""``.
+
+Internally ``setup_sqlalchemy``:
+
+* builds (or accepts) the engine and configures a ``sessionmaker`` bound to it;
+* registers a request-scoped service factory for the ``sqlalchemy.orm.Session``
+  type (via ``config.register_service_factory``), which returns a transaction-
+  managed session built with ``get_tm_session(session_factory, request.tm)``;
+* registers a ``scoped_session`` under the name
+  ``"scoped_session"`` (or ``"scoped_session:<name>"`` when ``name`` is given);
+* defers ``sqlalchemy.orm.configure_mappers`` via a config action.
+
+Call ``setup_sqlalchemy`` *after* importing all of your model modules so the
+mappers are fully populated.
+
+Transaction-managed Sessions
+----------------------------
+
+``get_tm_session(session_factory, transaction_manager)`` creates a session and
+hooks it to a transaction manager. It imports ``zope.sqlalchemy`` lazily (so
+the dependency is only required when this function actually runs) and calls
+``zope.sqlalchemy.register(dbsession, transaction_manager=...)``.
+
+Inside a request, ``setup_sqlalchemy`` passes ``request.tm`` (provided by
+``pyramid_tm``) as the transaction manager, so commits and rollbacks are tied
+to the request lifecycle automatically.
+
+In scripts, where there is no ``pyramid_tm`` request, wrap the session in a
+transaction manager yourself:
+
+.. code-block:: python
+
+    import transaction
+    from tet.sqlalchemy.simple import get_tm_session
+
+    with transaction.manager:
+        dbsession = get_tm_session(session_factory, transaction.manager)
+        # ... use dbsession ...
 
 Using Sessions in Views
 -----------------------
 
-Access the database session via pyramid_di autowired dependency injection:
+The session is registered as a ``pyramid_di`` service keyed on the
+``sqlalchemy.orm.Session`` type. Retrieve it with ``request.find_service``:
+
+.. code-block:: python
+
+    from pyramid.view import view_config
+    from sqlalchemy.orm import Session
+
+    @view_config(route_name='items', renderer='json')
+    def list_items(request):
+        session = request.find_service(Session)
+        items = session.query(MyModel).all()
+        return {'items': items}
+
+Because the service is registered with ``pyramid_di``, it can also be injected
+into a service or view class via ``autowired``:
 
 .. code-block:: python
 
@@ -135,52 +226,94 @@ Access the database session via pyramid_di autowired dependency injection:
     from sqlalchemy.orm import Session
 
     class ItemViews:
-        """Views with autowired database session."""
+        # Resolved from the request-scoped Session service
+        session: Session = autowired(Session)
 
-        # Database session automatically injected via pyramid_di
-        session: Session = autowired()
+        def __init__(self, request):
+            self.request = request
 
         @view_config(route_name='items', renderer='json')
-        def list_items(self, request):
-            # Use the autowired session - automatically managed
+        def list_items(self):
             items = self.session.query(MyModel).all()
             return {'items': items}
 
-Automatic Features
------------------
+If you registered a named database (``setup_sqlalchemy(name="reports")``), pass
+the same name when resolving: ``request.find_service(Session, name="reports")``.
 
-When using ``config.setup_sqlalchemy()``, you get all of this automatically:
+Automatic Features
+------------------
+
+When you include ``tet.sqlalchemy.simple`` and call
+``config.setup_sqlalchemy()``, you get:
 
 **Dependency Injection (pyramid_di)**
-  - Sessions are registered as services
-  - Available via ``autowired`` class attributes
-  - Request-scoped lifecycle management
+  The session is registered as a request-scoped service keyed on the
+  ``Session`` type, resolvable via ``find_service`` or ``autowired``.
 
 **Transaction Management (pyramid_tm)**
-  - Transactions start automatically per request
-  - Committed on successful responses (2xx, 3xx)
-  - Rolled back on exceptions or error responses (4xx, 5xx)
-  - No manual commit/rollback needed
+  ``pyramid_tm`` is included and configured with the
+  ``pyramid_tm.explicit_manager`` hook. The session is joined to
+  ``request.tm`` via ``zope.sqlalchemy``, so the transaction is committed on a
+  successful response and aborted when an exception propagates -- no manual
+  commit or rollback needed.
 
-**Session Lifecycle**
-  - Sessions created per request
-  - Automatically closed after request completion
-  - Proper cleanup and connection management
-
-Model Integration
+Password Hashing
 ================
 
-Tet's JSON renderer automatically handles SQLAlchemy model objects.
+``tet.sqlalchemy.password`` provides ``UserPasswordMixin``, a mixin for user
+models that stores a hashed password and verifies plaintext against it. It
+delegates hashing and verification to ``tet.util.crypt`` (``crypt`` and
+``verify``).
+
+The mixin defines a ``_password`` column (named ``password`` in the database,
+typed ``sqlalchemy.Unicode``, nullable) and exposes it through a ``password``
+synonym property: assigning to ``password`` hashes the value, and reading it
+returns the stored hash.
+
+.. code-block:: python
+
+    from sqlalchemy import Column, Integer, String
+    from tet.sqlalchemy.simple import declarative_base
+    from tet.sqlalchemy.password import UserPasswordMixin
+
+    Base = declarative_base()
+
+    class User(UserPasswordMixin, Base):
+        __tablename__ = 'users'
+
+        id = Column(Integer, primary_key=True)
+        username = Column(String(100), unique=True, nullable=False)
+
+Using the mixin:
+
+.. code-block:: python
+
+    user = User(username='john')
+    user.password = 'secret123'        # hashed automatically on assignment
+
+    user.password                      # -> the stored hash, not the plaintext
+
+    if user.validate_password('secret123'):
+        print('Password correct!')
+
+``validate_password(password)`` returns ``False`` when no password has been set
+(the stored hash is ``None``), and otherwise returns the result of
+``tet.util.crypt.verify``.
 
 Model Serialization
--------------------
+===================
 
-SQLAlchemy models can be made JSON-serializable:
+Tet's JSON renderer can serialize SQLAlchemy model objects. See the JSON
+renderer documentation for full details; the patterns below summarize the two
+common approaches.
+
+Custom ``__json__`` Method
+--------------------------
 
 .. code-block:: python
 
     from sqlalchemy import Column, Integer, String, DateTime
-    from sqlalchemy.ext.declarative import declarative_base
+    from tet.sqlalchemy.simple import declarative_base
 
     Base = declarative_base()
 
@@ -193,24 +326,26 @@ SQLAlchemy models can be made JSON-serializable:
         created = Column(DateTime)
 
         def __json__(self, request):
-            """Custom JSON serialization method."""
             return {
                 'id': self.id,
                 'name': self.name,
                 'email': self.email,
-                'created': self.created  # Automatically converted by Tet
+                'created': self.created,  # datetime handled by Tet's renderer
             }
 
-Alternatively, use the JSON adapter system:
+JSON Adapter
+------------
 
 .. code-block:: python
+
+    from pyramid.config import Configurator
 
     def user_adapter(user, request):
         return {
             'id': user.id,
             'name': user.name,
             'email': user.email,
-            'created': user.created
+            'created': user.created,
         }
 
     def main():
@@ -223,91 +358,29 @@ Alternatively, use the JSON adapter system:
 Query Result Handling
 ---------------------
 
-Tet automatically handles SQLAlchemy query results:
+Tet's JSON renderer also handles SQLAlchemy keyed-tuple query results, so
+column-projection queries can be returned directly:
 
 .. code-block:: python
+
+    from pyramid.view import view_config
+    from sqlalchemy.orm import Session
 
     @view_config(route_name='user_summary', renderer='json')
     def user_summary(request):
-        session = request.find_service(name='dbsession')
-
-        # Named tuple results are automatically serializable
+        session = request.find_service(Session)
         results = session.query(User.name, User.email).all()
-
-        return {'users': results}  # Automatically converted to list of dicts
-
-Database Configuration
-=====================
-
-Setting Up SQLAlchemy with Tet
-------------------------------
-
-A complete database configuration example:
-
-.. code-block:: python
-
-    from pyramid.config import Configurator
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from pyramid_di import service
-
-    # Database configuration
-    def get_engine(settings):
-        return create_engine(settings['sqlalchemy.url'])
-
-    def get_session_factory(engine):
-        return sessionmaker(bind=engine)
-
-    @service(name='dbsession', scope='request')
-    def get_db_session(request):
-        session_factory = request.registry['db_session_factory']
-        session = session_factory()
-
-        def cleanup(request):
-            session.close()
-
-        request.add_finished_callback(cleanup)
-        return session
-
-    def main(global_config, **settings):
-        config = Configurator(settings=settings)
-
-        # Database setup
-        engine = get_engine(settings)
-        session_factory = get_session_factory(engine)
-        config.registry['db_session_factory'] = session_factory
-
-        # Include Tet features
-        config.include('pyramid_di')
-        config.include('tet.renderers.json')
-
-        return config.make_wsgi_app()
-
-Connection Pooling
------------------
-
-Configure SQLAlchemy connection pooling:
-
-.. code-block:: python
-
-    from sqlalchemy import create_engine
-
-    def get_engine(settings):
-        return create_engine(
-            settings['sqlalchemy.url'],
-            pool_size=10,
-            max_overflow=20,
-            pool_timeout=30,
-            pool_recycle=3600
-        )
+        return {'users': results}
 
 Testing with Databases
-=====================
+======================
 
 Testing Patterns
 ----------------
 
-Use pytest fixtures for database testing:
+Use pytest fixtures for database testing. Per project conventions, prefer a
+real PostgreSQL database (required for JSONB and other PostgreSQL-specific
+types) over SQLite:
 
 .. code-block:: python
 
@@ -318,7 +391,7 @@ Use pytest fixtures for database testing:
 
     @pytest.fixture(scope='session')
     def engine():
-        return create_engine('sqlite:///:memory:')
+        return create_engine('postgresql+psycopg://user:pass@localhost/test')
 
     @pytest.fixture(scope='session')
     def tables(engine):
@@ -337,78 +410,72 @@ Use pytest fixtures for database testing:
 Testing Root Factories
 ----------------------
 
-Test your root factories with proper mocking:
+Because the factory resolves its session via ``request.find_service(Session)``,
+mock ``find_service`` accordingly:
 
 .. code-block:: python
 
     import pytest
     from unittest.mock import Mock
+    from sqlalchemy.orm import Session
+
     from myapp.models import MyModel
     from myapp.root import MyRootFactory
 
     def test_root_factory_success(dbsession):
-        # Create test data
         obj = MyModel(name='test')
         dbsession.add(obj)
         dbsession.commit()
 
-        # Mock request
         request = Mock()
-        request.dbsession = dbsession
+        request.find_service.return_value = dbsession
 
-        # Test root factory
         root = MyRootFactory(request)
-        result = root[str(obj.id)]
-
-        assert result == obj
+        assert root[str(obj.id)] == obj
 
     def test_root_factory_not_found(dbsession):
         request = Mock()
-        request.dbsession = dbsession
+        request.find_service.return_value = dbsession
 
         root = MyRootFactory(request)
-
         with pytest.raises(KeyError):
-            root['nonexistent']
+            root['999999']
 
 Best Practices
-=============
+==============
 
-**Use Request-Scoped Sessions**
-  Always use request-scoped database sessions to avoid connection leaks.
+**Use the Registered Session Service**
+  Resolve the session via ``request.find_service(Session)`` (or ``autowired``)
+  rather than creating ad-hoc sessions, so it participates in the request
+  transaction.
 
-**Handle Exceptions Properly**
-  Use Tet's root factories to convert SQL exceptions to appropriate HTTP responses.
+**Let the Factory Map Exceptions**
+  Use ``SQLARootFactory`` and let it convert ``NoResultFound``,
+  ``MultipleResultsFound``, and ``DataError`` into ``KeyError`` / 404.
 
 **Implement Custom Serialization**
   Use ``__json__`` methods or JSON adapters for model serialization.
 
-**Use Transactions**
-  Include ``pyramid_tm`` for automatic transaction management.
+**Rely on pyramid_tm**
+  Let ``pyramid_tm`` and ``zope.sqlalchemy`` manage commit/rollback; avoid
+  manual transaction control inside views.
 
 **Test Database Code**
-  Use proper testing patterns with database fixtures and rollbacks.
-
-**Configure Connection Pooling**
-  Set appropriate connection pool settings for production.
-
-**Monitor Performance**
-  Use SQLAlchemy's logging to monitor and optimize database queries.
+  Use database fixtures with rollbacks; use PostgreSQL where the application
+  depends on PostgreSQL-specific types.
 
 Security Considerations
-======================
+=======================
 
 **Parameterized Queries**
-  SQLAlchemy ORM automatically uses parameterized queries to prevent SQL injection.
+  The SQLAlchemy ORM uses parameterized queries, preventing SQL injection.
 
 **Input Validation**
-  Always validate input data before using it in database queries.
+  Validate input before using it in queries; the factory's ``DataError``
+  mapping is a safety net, not a substitute for validation.
 
 **Sensitive Data**
-  Be careful about what model attributes are included in JSON serialization.
+  Never serialize the ``password`` hash (or other secrets) into JSON output.
 
-**Database Permissions**
-  Use appropriate database user permissions in production.
-
-**Connection Security**
-  Use SSL/TLS for database connections in production environments.
+**Database Permissions and Transport**
+  Use least-privilege database users and SSL/TLS connections in production.

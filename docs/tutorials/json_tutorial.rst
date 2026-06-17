@@ -1,6 +1,6 @@
-==============
+=============
 JSON Tutorial
-==============
+=============
 
 This tutorial covers Tet's advanced JSON handling capabilities, including safe serialization, custom adapters, and XSS prevention.
 
@@ -57,7 +57,7 @@ Built-in Type Support
     # }
 
 SQLAlchemy Integration
----------------------
+----------------------
 
 The JSON renderer automatically handles SQLAlchemy query results:
 
@@ -77,12 +77,12 @@ The JSON renderer automatically handles SQLAlchemy query results:
         return {'user_stats': stats}  # Automatically converted to list of dicts
 
 Custom JSON Adapters
-===================
+====================
 
 Create custom adapters for your own types.
 
 Simple Type Adapters
--------------------
+--------------------
 
 .. code-block:: python
 
@@ -108,7 +108,7 @@ Simple Type Adapters
             return config.make_wsgi_app()
 
 Model Adapters
--------------
+--------------
 
 Create adapters for your SQLAlchemy models:
 
@@ -139,7 +139,7 @@ Create adapters for your SQLAlchemy models:
     config.add_json_adapter(for_=User, adapter=user_adapter)
 
 Context-Aware Adapters
----------------------
+----------------------
 
 Adapters receive the request object, allowing for context-aware serialization:
 
@@ -173,7 +173,7 @@ Multiple JSON Renderers
 You can register multiple JSON renderers for different purposes.
 
 Specialized Renderers
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -232,7 +232,7 @@ Safe JavaScript Serialization
 Tet provides utilities to safely embed JSON in HTML pages, preventing XSS attacks.
 
 The XSS Problem
---------------
+---------------
 
 Standard JSON serialization can be dangerous when embedded in HTML:
 
@@ -249,7 +249,7 @@ Standard JSON serialization can be dangerous when embedded in HTML:
 
 When embedded in HTML:
 
-.. code-block:: html
+.. code-block:: text
 
     <!-- DANGEROUS - DON'T DO THIS -->
     <script>
@@ -284,7 +284,7 @@ Use Tet's ``js_safe_dumps`` function:
         return {'user_json': safe_user_json}
 
 Template Integration
--------------------
+--------------------
 
 In your Chameleon template:
 
@@ -365,7 +365,7 @@ Handle complex nested objects:
         }
 
 Pagination-Aware JSON
---------------------
+---------------------
 
 Handle paginated results:
 
@@ -393,7 +393,7 @@ Handle paginated results:
         }
 
 Error Response JSON
-------------------
+-------------------
 
 Standardize error responses:
 
@@ -437,7 +437,7 @@ Standardize error responses:
             )
 
 Performance Optimization
-=======================
+========================
 
 Optimize JSON serialization for performance.
 
@@ -461,7 +461,7 @@ Lazy Loading with JSON
         return {'users': users}
 
 Caching JSON Responses
----------------------
+----------------------
 
 .. code-block:: python
 
@@ -489,12 +489,12 @@ Caching JSON Responses
         return response
 
 JSON Schema Validation
-=====================
+======================
 
 Validate JSON input using schemas.
 
 Input Validation
----------------
+----------------
 
 .. code-block:: python
 
@@ -551,12 +551,12 @@ Input Validation
         return {'user': user}
 
 Testing JSON APIs
-================
+=================
 
 Test your JSON endpoints thoroughly.
 
 Basic JSON Testing
------------------
+------------------
 
 .. code-block:: python
 
@@ -582,7 +582,7 @@ Basic JSON Testing
         assert 'error' in error_data
 
 Custom JSON Assertions
----------------------
+----------------------
 
 .. code-block:: python
 
@@ -608,7 +608,7 @@ Custom JSON Assertions
         assert_iso_datetime(user_data['created_at'])
 
 Best Practices
-=============
+==============
 
 **Security First**
 - Always use ``js_safe_dumps`` when embedding JSON in HTML

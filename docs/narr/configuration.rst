@@ -5,14 +5,18 @@ Configuration
 Tet provides enhanced configuration capabilities that extend Pyramid's configuration system with additional directives and conveniences.
 
 Basic Configuration
-==================
+===================
 
 Tet modules are configured through Pyramid's ``Configurator`` using the ``include`` directive.
 
 Application Factory Pattern
 ---------------------------
 
-Tet uses an application factory decorator that automatically configures features:
+Tet provides the :func:`tet.config.application_factory` decorator, which wraps
+a configuration function so it becomes a standard Pyramid/Paster application
+entry point accepting ``(global_config, **settings)``. The wrapped function
+receives a single argument -- the :class:`~pyramid.config.Configurator` -- and
+by default the wrapper returns a WSGI application built from it:
 
 .. code-block:: python
 
@@ -25,35 +29,62 @@ Tet uses an application factory decorator that automatically configures features
         config.add_route('home', '/')
         config.scan()
 
-    # Or with minimal features
-    @application_factory(included_features=MINIMAL_FEATURES)
+    # The decorator can also be applied without arguments. In that case the
+    # default is MINIMAL_FEATURES (no features are auto-included), so you add
+    # what you need manually.
+    @application_factory
     def minimal_main(config):
         """Minimal Tet application."""
         config.include('tet.renderers.json')  # Add features manually
         config.add_route('api', '/api')
 
+The decorator accepts the following keyword arguments:
+
+* ``included_features`` -- iterable of feature names to include automatically
+  (defaults to :data:`~tet.config.MINIMAL_FEATURES`, i.e. an empty list).
+  Nested iterables are flattened.
+* ``excluded_features`` -- iterable of feature names to skip even if present in
+  ``included_features``.
+* ``configure_only`` -- if ``True``, the wrapper returns whatever the wrapped
+  function returns (typically the configurator) instead of building a WSGI
+  application. Defaults to ``False``.
+* ``package`` -- the package passed to the ``Configurator``; defaults to the
+  caller's package.
+
+Any extra keyword arguments are passed through to
+:func:`~tet.config.create_configurator`.
+
+If the wrapped function returns a ``Configurator``, that returned configurator
+is used to build the WSGI application; otherwise the configurator created by
+the decorator is used.
+
 Available Features
 ------------------
 
-Tet provides predefined feature sets:
+Tet provides two predefined feature sets in :mod:`tet.config`:
 
-* ``ALL_FEATURES``: All Tet features enabled
-* ``MINIMAL_FEATURES``: No features (empty list)
+* :data:`~tet.config.ALL_FEATURES` -- all standard Tet features (see the list
+  below)
+* :data:`~tet.config.MINIMAL_FEATURES` -- no features (an empty list)
 
-Individual features can be included:
+Individual features are named with the part of the dotted module path that
+follows ``tet.``; ``create_configurator`` includes each as ``tet.<feature>``.
+The available feature names are:
 
-* ``"services"`` - Service configuration
+* ``"services"`` - Dependency injection via pyramid_di
 * ``"i18n"`` - Internationalization support
-* ``"renderers.json"`` - Enhanced JSON renderer
-* ``"renderers.tonnikala"`` - Tonnikala template renderer
-* ``"renderers.tonnikala.i18n"`` - Tonnikala with i18n
-* ``"security.authorization"`` - Enhanced authorization
-* ``"security.csrf"`` - CSRF protection
+* ``"renderers.json"`` - JSON rendering with custom type adapters
+* ``"renderers.tonnikala"`` - Tonnikala template engine integration
+* ``"renderers.tonnikala.i18n"`` - Tonnikala with i18n support
+* ``"security.authorization"`` - Custom authorization policy
+* ``"security.csrf"`` - CSRF token protection
 
 Manual Configuration
 --------------------
 
-For fine-grained control, create the configurator manually:
+For fine-grained control, create the configurator manually with
+:func:`tet.config.create_configurator`. All of its parameters are
+keyword-only:
 
 .. code-block:: python
 
@@ -64,7 +95,7 @@ For fine-grained control, create the configurator manually:
             global_config=global_config,
             settings=settings,
             included_features=['renderers.json', 'security.csrf'],
-            excluded_features=['i18n']
+            excluded_features=['i18n'],
         )
 
         # Your configuration
@@ -72,6 +103,25 @@ For fine-grained control, create the configurator manually:
         config.scan()
 
         return config.make_wsgi_app()
+
+The most commonly used keyword arguments are:
+
+* ``global_config`` -- the global configuration mapping (from PasteDeploy).
+* ``settings`` -- the application settings mapping.
+* ``merge_global_config`` -- when ``True`` (the default) and ``global_config``
+  is a mapping, it is merged into ``settings`` via a ``ChainMap``.
+* ``included_features`` / ``excluded_features`` -- iterables of feature names;
+  both are flattened, and the effective set is
+  ``included_features - excluded_features``. The resulting set is stored on
+  ``config.registry.tet_features``.
+* ``configurator_class`` -- the ``Configurator`` subclass to instantiate
+  (defaults to :class:`pyramid.config.Configurator`).
+* ``package`` -- the package for the configurator; defaults to the caller's
+  package. The package name is also used as the default i18n domain.
+
+Any remaining keyword arguments are forwarded to the ``Configurator``
+constructor (the ``default_i18n_domain`` setting, if given, is extracted and
+applied via ``add_settings``).
 
 Configuration Directives
 ========================
@@ -114,7 +164,7 @@ JSON Renderer Directives
     )
 
 Authorization Directive
-----------------------
+-----------------------
 
 **set_authorization_policy**
   Enhanced authorization policy registration that supports Tet's ``INewAuthorizationPolicy``:
@@ -130,12 +180,12 @@ Authorization Directive
     config.set_authorization_policy(policy)
 
 Module Configuration
-===================
+====================
 
 Individual Tet modules can be configured with specific options.
 
 CSRF Configuration
------------------
+------------------
 
 The CSRF module sets secure defaults but can be customized:
 
@@ -185,12 +235,12 @@ Customize the JSON renderer behavior:
             return config.make_wsgi_app()
 
 Settings Integration
-===================
+====================
 
 Tet modules respect Pyramid's settings system for configuration.
 
 Database Settings
-----------------
+-----------------
 
 Configure SQLAlchemy integration through settings:
 
@@ -211,7 +261,7 @@ Configure SQLAlchemy integration through settings:
     session.cookie_secure = true
 
 Security Settings
-----------------
+-----------------
 
 Configure security-related settings:
 
@@ -228,7 +278,7 @@ Configure security-related settings:
     auth.secret = auth-signing-secret
 
 Application Settings
--------------------
+--------------------
 
 Access settings in your application code:
 
@@ -244,7 +294,7 @@ Access settings in your application code:
         return {'debug': debug_mode}
 
 Environment Configuration
-========================
+=========================
 
 Tet applications can be configured for different environments.
 
@@ -273,7 +323,7 @@ Development Configuration
             return config.make_wsgi_app()
 
 Production Configuration
------------------------
+------------------------
 
 .. code-block:: python
 
@@ -298,7 +348,7 @@ Production Configuration
             return config.make_wsgi_app()
 
 Testing Configuration
---------------------
+---------------------
 
 .. code-block:: python
 
@@ -321,12 +371,12 @@ Testing Configuration
             return config.make_wsgi_app()
 
 Advanced Configuration
-=====================
+======================
 
 Complex configuration scenarios and patterns.
 
 Factory Configuration
---------------------
+---------------------
 
 Configure root factories and other components:
 
@@ -353,7 +403,7 @@ Configure root factories and other components:
             return config.make_wsgi_app()
 
 Service Configuration
---------------------
+---------------------
 
 Configure services with pyramid_di:
 
@@ -442,7 +492,7 @@ Settings Helper
         return SettingsHelper(settings)
 
 Configuration Profiles
-=====================
+======================
 
 Managing different configuration profiles.
 
@@ -482,7 +532,7 @@ Profile System
             return config.make_wsgi_app()
 
 Best Practices
-=============
+==============
 
 **Validate Early**
   Validate configuration at application startup to catch errors early.

@@ -1,0 +1,309 @@
+===========================
+Internationalization (i18n)
+===========================
+
+Tet builds on Pyramid's translation machinery and wires it up so that
+translation is convenient from both view code and templates. Once i18n is
+enabled, every request gains ``request.translate`` and ``request.pluralize``
+helpers that know the application's default translation domain, and every
+template -- including viewlet fragments -- automatically receives the familiar
+``_``, ``gettext``, ``ngettext`` and ``localizer`` globals.
+
+This page explains how to enable i18n, how the request helpers behave, how the
+template globals are injected, and how to lay out your translation catalogs.
+
+Enabling i18n
+-------------
+
+The i18n support lives in :mod:`tet.i18n`. There are two ways to turn it on.
+
+The recommended way is to list ``"i18n"`` among the features of your
+application factory. The application factory derives a sensible default
+translation domain (your package name) automatically.
+
+.. code-block:: python
+
+    from tet.config import application_factory
+
+    @application_factory(included_features=["i18n"])
+    def main(config):
+        config.add_translation_dirs("myapp:locale")
+        config.scan()
+
+You can also include the module directly the way you would include any Pyramid
+add-on:
+
+.. code-block:: python
+
+    config.include("tet.i18n")
+
+When included this way, the default translation domain is taken from the
+``default_i18n_domain`` setting if present, otherwise it falls back to the
+configured package name:
+
+.. code-block:: ini
+
+    [app:main]
+    use = egg:myapp
+    default_i18n_domain = myapp
+
+Choosing the default domain explicitly
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you want full control, call :func:`tet.i18n.configure_i18n` yourself and
+pass the domain you want to use:
+
+.. code-block:: python
+
+    from tet.i18n import configure_i18n
+
+    def main(global_config, **settings):
+        config = Configurator(settings=settings)
+        configure_i18n(config, default_domain="myapp")
+        config.add_translation_dirs("myapp:locale")
+        # ...
+
+``configure_i18n`` is what actually does the work. It:
+
+- subscribes ``add_renderer_globals`` to both ``pyramid.events.BeforeRender``
+  and ``tet.viewlet.IBeforeViewletRender``;
+- creates a :class:`pyramid.i18n.TranslationStringFactory` for the default
+  domain and stores it on the registry as ``config.registry.tsf``;
+- adds the ``request.translate`` and ``request.pluralize`` request methods
+  (both reified properties);
+- adds a ``request.localize`` reified property bound to
+  :func:`pyramid.i18n.get_localizer`.
+
+Translation string factories
+-----------------------------
+
+A *translation string factory* turns a plain string into a Pyramid
+:class:`~pyramid.i18n.TranslationString` bound to a particular domain. Tet
+creates one for your default domain and keeps it on the registry:
+
+.. code-block:: python
+
+    tsf = config.registry.tsf
+    msg = tsf("Hello, World!")
+
+You rarely need to touch ``registry.tsf`` directly, because
+``request.translate`` and ``request.pluralize`` apply it for you (see below).
+You can still create additional factories for other domains in the usual
+Pyramid way when you need them:
+
+.. code-block:: python
+
+    from pyramid.i18n import TranslationStringFactory
+
+    _ = TranslationStringFactory("myapp")
+    label = _("Save")
+
+Translating in view code
+-------------------------
+
+``request.translate`` is a reified property that returns a callable. Calling
+it with a string wraps that string in the registry's translation string
+factory (so it picks up the default domain) and then translates it with the
+request's localizer.
+
+.. code-block:: python
+
+    from pyramid.view import view_config
+
+    @view_config(route_name="hello", renderer="json")
+    def hello(request):
+        return {"message": request.translate("Hello, World!")}
+
+The callable accepts keyword-only arguments for fine control:
+
+.. code-block:: python
+
+    # Override the domain for a single call
+    request.translate("Save", domain="otherapp")
+
+    # Disambiguate with a message context
+    request.translate("Open", context="verb")
+
+    # Interpolate placeholders with a mapping
+    request.translate(
+        "Welcome, %(name)s",
+        mapping={"name": user.name},
+    )
+
+The full signature of the returned callable is::
+
+    auto_translate(string, *, domain=<default>, mapping=None, context=None)
+
+If you pass a value that is already a ``TranslationString`` (rather than a
+plain ``str``), it is translated as-is and the ``context`` argument is ignored
+-- the factory is only applied to bare strings.
+
+Pluralization
+~~~~~~~~~~~~~~
+
+``request.pluralize`` works the same way for plural forms. It returns a
+callable that selects the singular or plural message based on ``n`` and
+translates the result:
+
+.. code-block:: python
+
+    @view_config(route_name="cart", renderer="json")
+    def cart(request):
+        count = len(request.cart)
+        return {
+            "summary": request.pluralize(
+                "%(num)d item in cart",
+                "%(num)d items in cart",
+                count,
+                mapping={"num": count},
+            ),
+        }
+
+The full signature is::
+
+    auto_pluralize(singular, plural, n, *, domain=<default>,
+                   mapping=None, context=None)
+
+As with ``translate``, the ``context`` argument is applied only when the
+``singular`` value is a plain string.
+
+Template globals
+----------------
+
+When i18n is configured, Tet injects four globals into every template render
+context via the ``add_renderer_globals`` subscriber:
+
+=============== =====================
+Global          Bound to
+=============== =====================
+``_``           ``request.translate``
+``gettext``     ``request.translate``
+``ngettext``    ``request.pluralize``
+``localizer``   ``request.localizer``
+=============== =====================
+
+``_`` and ``gettext`` are aliases for the same translate callable, so you can
+use whichever reads better in a given template.
+
+Tonnikala templates use ``$`` for interpolation, so calling these globals is
+natural:
+
+.. code-block:: html
+
+    <h1>$_("Welcome to our site!")</h1>
+
+    <button>${_("Save")}</button>
+
+When you need to pass a mapping or a context, use braces to delimit the full
+expression:
+
+.. code-block:: html
+
+    <p>${_('Welcome, %(name)s', mapping={'name': user.name})}</p>
+
+    <span>${_('Open', context='verb')}</span>
+
+Pluralization in templates uses ``ngettext`` exactly like the request helper:
+
+.. code-block:: html
+
+    <p>${ngettext('%(num)d message',
+                  '%(num)d messages',
+                  count,
+                  mapping={'num': count})}</p>
+
+The ``localizer`` global is the request's Pyramid
+:class:`~pyramid.i18n.Localizer`, which is handy for locale-aware formatting
+or for inspecting the negotiated locale:
+
+.. code-block:: html
+
+    <html lang="$localizer.locale_name">
+
+Globals in viewlets
+~~~~~~~~~~~~~~~~~~~~
+
+Viewlet fragments are rendered through a separate event,
+``tet.viewlet.IBeforeViewletRender``, rather than the normal Pyramid
+``BeforeRender``. Because ``configure_i18n`` subscribes ``add_renderer_globals``
+to *both* events, the same ``_``, ``gettext``, ``ngettext`` and ``localizer``
+globals are available inside viewlet templates with no extra work:
+
+.. code-block:: python
+
+    from tet.viewlet import viewlet
+
+    @viewlet("myapp:templates/sidebar.tk")
+    def sidebar(request):
+        return {"user": request.user}
+
+.. code-block:: html
+
+    <!-- myapp:templates/sidebar.tk -->
+    <aside>
+      <h2>$_("Navigation")</h2>
+      <p>${_('Signed in as %(name)s', mapping={'name': user.name})}</p>
+    </aside>
+
+The subscriber resolves the current request from the event payload, falling
+back to :func:`pyramid.threadlocal.get_current_request` when the event does
+not carry one, so the globals are populated reliably in both rendering paths.
+
+Setting up translation directories and locales
+----------------------------------------------
+
+Translations are loaded from translation directories registered with
+:meth:`~pyramid.config.Configurator.add_translation_dirs`. A typical layout
+places GNU ``gettext`` catalogs under a ``locale`` directory in your package:
+
+.. code-block:: text
+
+    myapp/
+      locale/
+        myapp.pot
+        fi/
+          LC_MESSAGES/
+            myapp.mo
+            myapp.po
+        sv/
+          LC_MESSAGES/
+            myapp.mo
+            myapp.po
+
+Register the directory during configuration. The package name used here should
+match your default translation domain so that ``.mo`` files are found:
+
+.. code-block:: python
+
+    config.add_translation_dirs("myapp:locale")
+
+Pyramid negotiates the active locale per request (for example via a locale
+negotiator or the ``_LOCALE_`` request parameter); the localizer used by
+``request.translate`` and ``request.pluralize`` reflects that negotiated
+locale automatically.
+
+Extracting and compiling catalogs follows the standard ``gettext`` workflow.
+Extract messages into a ``.pot`` template, create per-locale ``.po`` files, and
+compile them to ``.mo``. For example, with ``Babel``:
+
+.. code-block:: console
+
+    $ pybabel extract -o myapp/locale/myapp.pot myapp
+    $ pybabel init -D myapp -i myapp/locale/myapp.pot \
+        -d myapp/locale -l fi
+    $ pybabel compile -D myapp -d myapp/locale
+
+Because ``request.translate`` wraps bare strings with the default-domain
+factory, the message ids you write in code and templates (``"Hello, World!"``,
+``"Save"``, ...) are exactly the strings the extractor should pick up. Make
+sure your extraction configuration scans both your Python modules and your
+Tonnikala templates.
+
+See also
+--------
+
+- :doc:`configuration` -- the application factory, features, and settings
+  such as ``default_i18n_domain``.
+- :doc:`templating` -- the Tonnikala renderer and ``$`` interpolation syntax.
+- :doc:`viewlets` -- reusable template fragments and the
+  ``IBeforeViewletRender`` event.
