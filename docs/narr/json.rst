@@ -69,10 +69,10 @@ Use the safe JSON in your templates:
 .. code-block:: html
 
     <script>
-        var userData = ${safe_json|n};
+        var userData = $literal(safe_json);
     </script>
 
-The ``|n`` filter outputs the value without HTML-escaping in the Tonnikala template engine, which is what you want since ``js_safe_dumps`` has already produced a string that is safe to embed in a ``<script>`` element.
+``$literal(...)`` outputs the value without HTML-escaping in the Tonnikala template engine, which is what you want since ``js_safe_dumps`` has already produced a string that is safe to embed in a ``<script>`` element. (Tonnikala escapes every ``$`` interpolation by default; ``$literal`` is the deliberate opt-out for already-safe markup.)
 
 Enhanced JSON Renderer
 ======================

@@ -37,7 +37,7 @@ Built-in Type Support
 
 .. code-block:: python
 
-    from datetime import datetime, date
+    from datetime import datetime, date, timezone
     from pyramid.view import view_config
 
 
@@ -128,7 +128,7 @@ Create adapters for your SQLAlchemy models:
         username = Column(String(50), unique=True)
         email = Column(String(100))
         password_hash = Column(String(128))  # Sensitive data
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         is_active = Column(Boolean, default=True)
 
 
@@ -272,7 +272,7 @@ Use Tet's ``js_safe_dumps`` function:
     # {"message": "\\u003c/script\\u003e\\u003cscript\\u003ealert('XSS')\\u003c/script\\u003e"}
 
 
-    @view_config(route_name="user_page", renderer="mytemplate.pt")
+    @view_config(route_name="user_page", renderer="mytemplate.tk")
     def user_page_view(request):
         user_data = {
             "name": request.user.name,
@@ -288,7 +288,7 @@ Use Tet's ``js_safe_dumps`` function:
 Template Integration
 --------------------
 
-In your Chameleon template:
+In your Tonnikala template:
 
 .. code-block:: html
 
@@ -302,7 +302,7 @@ In your Chameleon template:
 
         <script>
             // Safe JSON embedding - no XSS risk
-            var userData = ${user_json|n};
+            var userData = $literal(user_json);
 
             // Use the data safely
             document.getElementById('user-profile').innerHTML =
@@ -337,7 +337,7 @@ Handle complex nested objects:
         title = Column(String(200))
         content = Column(Text)
         author_id = Column(Integer, ForeignKey("users.id"))
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
         # Relationship
         author = relationship("User", back_populates="posts")
@@ -399,6 +399,8 @@ Standardize error responses:
 
 .. code-block:: python
 
+    from datetime import datetime, timezone
+
     from pyramid.httpexceptions import HTTPBadRequest, HTTPNotFound
 
 
@@ -416,7 +418,7 @@ Standardize error responses:
                 "message": error.message,
                 "code": error.code,
                 "details": error.details,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         }
 

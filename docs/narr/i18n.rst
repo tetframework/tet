@@ -195,7 +195,7 @@ natural:
 
     <h1>$_("Welcome to our site!")</h1>
 
-    <button>${_("Save")}</button>
+    <button>$_("Save")</button>
 
 When you need to pass a mapping or a context, use braces to delimit the full
 expression:
