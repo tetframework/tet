@@ -1,10 +1,8 @@
 exclude = [
-    ".bzr",
     ".direnv",
     ".eggs",
     ".git",
     ".git-rewrite",
-    ".hg",
     ".ipynb_checkpoints",
     ".mypy_cache",
     ".nox",
@@ -13,7 +11,6 @@ exclude = [
     ".pytest_cache",
     ".pytype",
     ".ruff_cache",
-    ".svn",
     ".tox",
     ".venv",
     ".vscode",
