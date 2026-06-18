@@ -31,6 +31,7 @@ directly on the configurator:
 
     from pyramid.config import Configurator
 
+
     def main(global_config, **settings):
         config = Configurator(settings=settings)
         config.include("tet.renderers.tonnikala")
@@ -53,6 +54,7 @@ instead of including it by hand:
 
     from tet.config import application_factory
 
+
     @application_factory(included_features=["renderers.tonnikala"])
     def main(config):
         config.add_route("home", "/")
@@ -73,6 +75,7 @@ template.
 .. code-block:: python
 
     from pyramid.view import view_config
+
 
     @view_config(route_name="home", renderer="templates/home.tk")
     def home(request):
@@ -206,6 +209,7 @@ With the feature-based factory, request the i18n feature instead:
 .. code-block:: python
 
     from tet.config import application_factory
+
 
     @application_factory(included_features=["renderers.tonnikala.i18n"])
     def main(config):

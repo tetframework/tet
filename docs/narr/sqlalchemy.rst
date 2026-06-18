@@ -26,6 +26,7 @@ request, which is stored as ``self.request``:
     from sqlalchemy.orm import Session
     from tet.sqlalchemy.factory import SQLARootFactory
 
+
     class UserFactory(SQLARootFactory):
         def supplier(self, item):
             """Override this method to provide object lookup logic."""
@@ -46,10 +47,11 @@ Register your factory with a route (or as the global root factory):
 
     from pyramid.config import Configurator
 
+
     def main():
         with Configurator() as config:
             # As a per-route factory
-            config.add_route('user', '/users/{id}', factory=UserFactory)
+            config.add_route("user", "/users/{id}", factory=UserFactory)
 
             # Or as the global traversal root factory
             config.set_root_factory(UserFactory)
@@ -86,15 +88,16 @@ you:
     from sqlalchemy.orm import Session
     from tet.sqlalchemy.factory import SQLARootFactory
 
+
     class ApplicationRoot(SQLARootFactory):
         def supplier(self, item):
             session = self.request.find_service(Session)
 
-            if re.fullmatch(r'\d+', item):
+            if re.fullmatch(r"\d+", item):
                 # Numeric primary key
                 return session.query(MyModel).filter_by(id=int(item)).one()
 
-            if re.fullmatch(r'[a-f0-9-]{36}', item):
+            if re.fullmatch(r"[a-f0-9-]{36}", item):
                 # UUID
                 return session.query(MyModel).filter_by(uuid=item).one()
 
@@ -124,11 +127,12 @@ it cannot be imported), includes ``pyramid_di`` and ``pyramid_tm``, and sets
     # Create models using Tet's declarative base (Alembic-friendly naming)
     Base = declarative_base()
 
+
     @application_factory(included_features=ALL_FEATURES)
     def main(config):
         # Adds the setup_sqlalchemy directive and includes
         # pyramid_di and pyramid_tm
-        config.include('tet.sqlalchemy.simple')
+        config.include("tet.sqlalchemy.simple")
 
         # Build the engine from settings (sqlalchemy.* by default) and
         # register the request-scoped session service
@@ -211,11 +215,12 @@ The session is registered as a ``pyramid_di`` service keyed on the
     from pyramid.view import view_config
     from sqlalchemy.orm import Session
 
-    @view_config(route_name='items', renderer='json')
+
+    @view_config(route_name="items", renderer="json")
     def list_items(request):
         session = request.find_service(Session)
         items = session.query(MyModel).all()
-        return {'items': items}
+        return {"items": items}
 
 Because the service is registered with ``pyramid_di``, it can also be injected
 into a service or view class via ``autowired``:
@@ -225,6 +230,7 @@ into a service or view class via ``autowired``:
     from pyramid_di import autowired
     from sqlalchemy.orm import Session
 
+
     class ItemViews:
         # Resolved from the request-scoped Session service
         session: Session = autowired(Session)
@@ -232,10 +238,10 @@ into a service or view class via ``autowired``:
         def __init__(self, request):
             self.request = request
 
-        @view_config(route_name='items', renderer='json')
+        @view_config(route_name="items", renderer="json")
         def list_items(self):
             items = self.session.query(MyModel).all()
-            return {'items': items}
+            return {"items": items}
 
 If you registered a named database (``setup_sqlalchemy(name="reports")``), pass
 the same name when resolving: ``request.find_service(Session, name="reports")``.
@@ -278,8 +284,9 @@ returns the stored hash.
 
     Base = declarative_base()
 
+
     class User(UserPasswordMixin, Base):
-        __tablename__ = 'users'
+        __tablename__ = "users"
 
         id = Column(Integer, primary_key=True)
         username = Column(String(100), unique=True, nullable=False)
@@ -288,13 +295,13 @@ Using the mixin:
 
 .. code-block:: python
 
-    user = User(username='john')
-    user.password = 'secret123'        # hashed automatically on assignment
+    user = User(username="john")
+    user.password = "secret123"  # hashed automatically on assignment
 
-    user.password                      # -> the stored hash, not the plaintext
+    user.password  # -> the stored hash, not the plaintext
 
-    if user.validate_password('secret123'):
-        print('Password correct!')
+    if user.validate_password("secret123"):
+        print("Password correct!")
 
 ``validate_password(password)`` returns ``False`` when no password has been set
 (the stored hash is ``None``), and otherwise returns the result of
@@ -317,8 +324,9 @@ Custom ``__json__`` Method
 
     Base = declarative_base()
 
+
     class User(Base):
-        __tablename__ = 'users'
+        __tablename__ = "users"
 
         id = Column(Integer, primary_key=True)
         name = Column(String(50))
@@ -327,10 +335,10 @@ Custom ``__json__`` Method
 
         def __json__(self, request):
             return {
-                'id': self.id,
-                'name': self.name,
-                'email': self.email,
-                'created': self.created,  # datetime handled by Tet's renderer
+                "id": self.id,
+                "name": self.name,
+                "email": self.email,
+                "created": self.created,  # datetime handled by Tet's renderer
             }
 
 JSON Adapter
@@ -340,17 +348,19 @@ JSON Adapter
 
     from pyramid.config import Configurator
 
+
     def user_adapter(user, request):
         return {
-            'id': user.id,
-            'name': user.name,
-            'email': user.email,
-            'created': user.created,
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "created": user.created,
         }
+
 
     def main():
         with Configurator() as config:
-            config.include('tet.renderers.json')
+            config.include("tet.renderers.json")
             config.add_json_adapter(for_=User, adapter=user_adapter)
 
             return config.make_wsgi_app()
@@ -366,11 +376,12 @@ column-projection queries can be returned directly:
     from pyramid.view import view_config
     from sqlalchemy.orm import Session
 
-    @view_config(route_name='user_summary', renderer='json')
+
+    @view_config(route_name="user_summary", renderer="json")
     def user_summary(request):
         session = request.find_service(Session)
         results = session.query(User.name, User.email).all()
-        return {'users': results}
+        return {"users": results}
 
 Testing with Databases
 ======================
@@ -389,15 +400,18 @@ types) over SQLite:
     from sqlalchemy.orm import sessionmaker
     from myapp.models import Base
 
-    @pytest.fixture(scope='session')
-    def engine():
-        return create_engine('postgresql+psycopg://user:pass@localhost/test')
 
-    @pytest.fixture(scope='session')
+    @pytest.fixture(scope="session")
+    def engine():
+        return create_engine("postgresql+psycopg://user:pass@localhost/test")
+
+
+    @pytest.fixture(scope="session")
     def tables(engine):
         Base.metadata.create_all(engine)
         yield
         Base.metadata.drop_all(engine)
+
 
     @pytest.fixture
     def dbsession(engine, tables):
@@ -422,8 +436,9 @@ mock ``find_service`` accordingly:
     from myapp.models import MyModel
     from myapp.root import MyRootFactory
 
+
     def test_root_factory_success(dbsession):
-        obj = MyModel(name='test')
+        obj = MyModel(name="test")
         dbsession.add(obj)
         dbsession.commit()
 
@@ -433,13 +448,14 @@ mock ``find_service`` accordingly:
         root = MyRootFactory(request)
         assert root[str(obj.id)] == obj
 
+
     def test_root_factory_not_found(dbsession):
         request = Mock()
         request.find_service.return_value = dbsession
 
         root = MyRootFactory(request)
         with pytest.raises(KeyError):
-            root['999999']
+            root["999999"]
 
 Best Practices
 ==============

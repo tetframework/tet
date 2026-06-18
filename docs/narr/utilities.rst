@@ -49,8 +49,8 @@ Standard Base64
 
     from tet.util.base64 import Base64
 
-    encoded = Base64.encode(b"hello")   # returns bytes
-    decoded = Base64.decode(encoded)    # returns b"hello"
+    encoded = Base64.encode(b"hello")  # returns bytes
+    decoded = Base64.decode(encoded)  # returns b"hello"
 
 ``Base64.encode`` wraps :func:`base64.b64encode` and returns ``bytes``;
 ``Base64.decode`` wraps :func:`base64.b64decode`. ``Base64.normalize`` is a
@@ -71,7 +71,7 @@ decode and tolerates common transcription mistakes.
     from tet.util.base64 import CrockfordBase32
 
     encoded = CrockfordBase32.encode(b"hello")  # returns str
-    decoded = CrockfordBase32.decode(encoded)    # returns bytes
+    decoded = CrockfordBase32.decode(encoded)  # returns bytes
 
     # Ambiguous characters are normalized: O -> 0, I/L -> 1
     CrockfordBase32.normalize("O1L")  # "011"
@@ -125,10 +125,10 @@ exploded into their characters.
     from tet.util.collections import flatten
 
     nested = [1, [2, 3, [4, 5]], 6]
-    list(flatten(nested))            # [1, 2, 3, 4, 5, 6]
+    list(flatten(nested))  # [1, 2, 3, 4, 5, 6]
 
     with_strings = ["hello", ["world", ["!"]]]
-    list(flatten(with_strings))      # ["hello", "world", "!"]
+    list(flatten(with_strings))  # ["hello", "world", "!"]
 
 Path Utilities
 ==============
@@ -178,16 +178,20 @@ is returned unchanged.
 
     export, __all__ = exporter()
 
+
     @export
     def my_public_function():
         pass
+
 
     @export
     class MyPublicClass:
         pass
 
+
     def _private_function():
         pass
+
 
     # __all__ == ["my_public_function", "MyPublicClass"]
 
@@ -215,6 +219,7 @@ A snippet file ``snippets/create_user.py`` looks like:
 
     def run(username, email):
         from myapp.models import User
+
         session = env["request"].dbsession
         user = User(username=username, email=email)
         session.add(user)
