@@ -242,7 +242,7 @@ before-render subscriber:
         <img src="$user.avatar_url" alt="$user.display_name">
         <span class="name">$user.display_name</span>
         <py:if test="is_self">
-            <span class="badge">${_('You')}</span>
+            <span class="badge">$_('You')</span>
         </py:if>
     </div>
 
@@ -254,7 +254,7 @@ itself by calling back through the ``viewlets`` global:
     <aside class="sidebar">
         $literal(viewlets.user_card(current_user))
         <p class="notifications">
-            ${_('Unread')}: $unread_count
+            $_('Unread'): $unread_count
         </p>
     </aside>
 
@@ -264,7 +264,7 @@ Finally, dropping the sidebar into a page layout:
 
     <body>
         <main>
-            ${literal(content)}
+            $literal(content)
         </main>
         $literal(viewlets.sidebar())
     </body>

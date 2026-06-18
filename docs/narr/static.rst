@@ -156,9 +156,9 @@ the chain of attribute access and the method call as a single unit:
 
 .. code-block:: html
 
-    <link href="${request.static_url('myapp:static/style.css')}" rel="stylesheet">
-    <script src="${request.static_url('myapp:static/app.js')}"></script>
-    <img src="${request.static_url('myapp:static/img/logo.png')}" alt="Logo">
+    <link href="$request.static_url('myapp:static/style.css')" rel="stylesheet">
+    <script src="$request.static_url('myapp:static/app.js')"></script>
+    <img src="$request.static_url('myapp:static/img/logo.png')" alt="Logo">
 
 At render time these expand to URLs such as::
 
@@ -175,7 +175,7 @@ renderer:
 
 .. code-block:: python
 
-    @view_config(renderer="myapp:templates/index.html")
+    @view_config(renderer="myapp:templates/index.tk")
     def index(request):
         return {
             "stylesheet_url": request.static_url("myapp:static/style.css"),
@@ -193,6 +193,6 @@ See also
 --------
 
 - :doc:`templating` -- writing Tonnikala templates and using ``$``
-  interpolation, including expressions like ``${request.static_url(...)}``.
+  interpolation, including expressions like ``$request.static_url(...)``.
 - :doc:`configuration` -- the application factory, ``config.include`` and
   registering directives during configuration.

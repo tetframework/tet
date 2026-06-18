@@ -23,6 +23,37 @@ Let's create a simple web application using Tet's enhanced features.
 Basic Application Structure
 ---------------------------
 
+You *can* keep an entire Tet application in a single module -- it is the
+quickest way to get a feel for the framework, and this tutorial does exactly
+that to keep each step short. A single file is perfectly fine for spikes,
+examples, and very small services.
+
+For anything you intend to maintain, though, organise the application as a
+Python **package** instead of a single file or one growing module. A package
+gives you a place for each concern (models, views, services, templates,
+migrations, tests) and makes ``config.scan()`` and asset specifications such as
+``"myapp:templates/home.tk"`` resolve cleanly. A typical layout looks like:
+
+.. code-block:: text
+
+    myapp/
+        myapp/
+            __init__.py        # main() application factory
+            models.py          # or a models/ package
+            views.py           # or a views/ package
+            services.py
+            templates/
+                home.tk
+            static/
+        development.ini
+        pyproject.toml
+        tests/
+
+The examples below use a flat ``app.py``/``models.py`` for brevity; when you
+move to a package, the same code lives in ``myapp/__init__.py``,
+``myapp/models.py`` and so on, and you start the app through the ``.ini`` file
+with ``pserve`` rather than a ``__main__`` block.
+
 Create a new directory for your project and add the following files:
 
 **app.py**
@@ -82,7 +113,7 @@ Let's enhance our application with database support using SQLAlchemy.
     from sqlalchemy import Column, Integer, String, DateTime, create_engine
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import sessionmaker
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     Base = declarative_base()
 
@@ -93,7 +124,7 @@ Let's enhance our application with database support using SQLAlchemy.
         id = Column(Integer, primary_key=True)
         name = Column(String(50), nullable=False)
         email = Column(String(100), unique=True, nullable=False)
-        created = Column(DateTime, default=datetime.utcnow)
+        created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
         def __json__(self, request):
             """JSON serialization for Tet's JSON renderer."""
@@ -225,7 +256,7 @@ Let's add some security features to our application.
 
 Create a template that safely embeds JSON:
 
-**templates/users.pt** (Chameleon template)
+**templates/users.tk** (Tonnikala template)
 
 .. code-block:: html
 
@@ -233,7 +264,7 @@ Create a template that safely embeds JSON:
     <html>
     <head>
         <title>Users</title>
-        <meta name="csrf-token" content="${request.session.get_csrf_token()}">
+        <meta name="csrf-token" content="$request.session.get_csrf_token()">
     </head>
     <body>
         <h1>Users</h1>
@@ -241,7 +272,7 @@ Create a template that safely embeds JSON:
 
         <script>
             // Safe JSON embedding using Tet's js_safe_dumps
-            var users = ${users_json|n};
+            var users = $literal(users_json);
 
             // Display users
             var container = document.getElementById('users');

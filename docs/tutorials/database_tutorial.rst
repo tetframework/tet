@@ -20,7 +20,7 @@ Create your database models and configuration:
     from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import relationship
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     Base = declarative_base()
 
@@ -32,7 +32,7 @@ Create your database models and configuration:
         username = Column(String(50), unique=True, nullable=False)
         email = Column(String(100), unique=True, nullable=False)
         password_hash = Column(String(128))
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         is_active = Column(Boolean, default=True)
 
         # Relationships
@@ -56,7 +56,7 @@ Create your database models and configuration:
         title = Column(String(200), nullable=False)
         content = Column(Text)
         author_id = Column(Integer, ForeignKey("users.id"))
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         is_published = Column(Boolean, default=False)
 
         # Relationships

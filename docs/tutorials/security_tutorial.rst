@@ -38,7 +38,7 @@ Working with CSRF Tokens
 
     <form method="post" action="/submit">
         <input type="hidden" name="csrf_token"
-               value="${request.session.get_csrf_token()}">
+               value="$request.session.get_csrf_token()">
         <input type="text" name="data" placeholder="Enter data">
         <input type="submit" value="Submit">
     </form>
@@ -48,7 +48,7 @@ Working with CSRF Tokens
 .. code-block:: javascript
 
     // Set CSRF token in meta tag (in your template)
-    // <meta name="csrf-token" content="${request.session.get_csrf_token()}">
+    // <meta name="csrf-token" content="$request.session.get_csrf_token()">
 
     function setupCSRF() {
         var token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -293,7 +293,7 @@ In your template:
 
     <script>
         // This is safe from XSS attacks
-        var userData = ${user_json|n};
+        var userData = $literal(user_json);
 
         // Use the data safely
         document.getElementById('user-name').textContent = userData.name;

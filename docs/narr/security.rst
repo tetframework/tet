@@ -37,7 +37,7 @@ In your templates, include CSRF tokens in forms:
 .. code-block:: html
 
     <form method="post" action="/submit">
-        <input type="hidden" name="csrf_token" value="${request.session.get_csrf_token()}">
+        <input type="hidden" name="csrf_token" value="$request.session.get_csrf_token()">
         <!-- Your form fields -->
         <input type="submit" value="Submit">
     </form>
@@ -167,7 +167,7 @@ Use Tet's JSON utilities to prevent XSS when embedding JSON in HTML:
     safe_json = js_safe_dumps(user_data)
 
     # In your template:
-    # <script>var userData = ${safe_json|n};</script>
+    # <script>var userData = $literal(safe_json);</script>
 
 The ``js_safe_dumps`` function escapes dangerous characters:
 

@@ -66,7 +66,7 @@ A plain function view looks exactly like it does in Pyramid:
     from tet.view import view_config
 
 
-    @view_config(route_name="home", renderer="templates/home.html")
+    @view_config(route_name="home", renderer="templates/home.tk")
     def home_view(request):
         return {"title": "Welcome to Tet"}
 
@@ -261,7 +261,7 @@ Two behaviours are worth remembering:
             # Default view for this context: /articles/<id>/
             return {"article": self.__name__}
 
-        @expose(renderer="templates/comments.html", request_method="GET")
+        @expose(renderer="templates/comments.tk", request_method="GET")
         def comments(self):
             # Named view: /articles/<id>/comments
             return {"comments": []}
