@@ -65,6 +65,7 @@ A plain function view looks exactly like it does in Pyramid:
 
     from tet.view import view_config
 
+
     @view_config(route_name="home", renderer="templates/home.html")
     def home_view(request):
         return {"title": "Welcome to Tet"}
@@ -99,6 +100,7 @@ way you would in any other ``pyramid_di`` service.
     from tet.view import ServiceViews, view_config
     from pyramid_di import autowired
 
+
     class UserViews(ServiceViews):
         # A request-scoped service injected by pyramid_di.
         user_service = autowired(UserService)
@@ -126,6 +128,7 @@ method of the class:
 .. code-block:: python
 
     from tet.view import view_config, view_defaults, ServiceViews
+
 
     @view_defaults(route_name="account", renderer="json")
     class AccountViews(ServiceViews):
@@ -188,6 +191,7 @@ classes) with dynamic lookups (implemented in ``_lookup``):
 
     from tet.view import BaseController, expose
 
+
     class UserController(BaseController):
         def __init__(self, request):
             self.request = request
@@ -247,6 +251,7 @@ Two behaviours are worth remembering:
 
     from tet.view import BaseController, expose
 
+
     class ArticleController(BaseController):
         def __init__(self, request):
             self.request = request
@@ -289,12 +294,13 @@ minimal setup looks like:
 
     from pyramid.config import Configurator
 
+
     def main(global_config, **settings):
         with Configurator(settings=settings) as config:
-            config.include("pyramid_di")          # required for ServiceViews
+            config.include("pyramid_di")  # required for ServiceViews
             config.add_route("users", "/users")
             config.add_route("user", "/users/{id}")
-            config.scan("myapp.views")            # picks up view_config / expose
+            config.scan("myapp.views")  # picks up view_config / expose
             return config.make_wsgi_app()
 
 For traversal controllers, also set your ``RootController`` as the root factory

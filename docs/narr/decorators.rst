@@ -172,8 +172,8 @@ Example
 
 
     report = Report(load_rows())
-    report.summary   # prints "computing summary..." and computes the dict
-    report.summary   # returns the cached dict; no print, no recompute
+    report.summary  # prints "computing summary..." and computes the dict
+    report.summary  # returns the cached dict; no print, no recompute
 
 Because caching uses the bound attribute name, you can rely on the cached value
 living under the attribute you actually access, which is what makes it suitable

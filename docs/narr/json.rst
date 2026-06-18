@@ -100,10 +100,7 @@ The enhanced renderer includes adapters for:
 
     from datetime import datetime, date
 
-    data = {
-        'created': datetime.now(),
-        'birthday': date(1990, 1, 1)
-    }
+    data = {"created": datetime.now(), "birthday": date(1990, 1, 1)}
     # Will serialize as:
     # {
     #     'created': '2024-01-15T10:30:00',
@@ -119,9 +116,10 @@ Enable the enhanced JSON renderer in your application:
 
     from pyramid.config import Configurator
 
+
     def main():
         with Configurator() as config:
-            config.include('tet.renderers.json')
+            config.include("tet.renderers.json")
             # Enhanced JSON renderer is now available
 
             return config.make_wsgi_app()
@@ -143,18 +141,17 @@ Use the ``add_json_adapter`` directive to register custom type adapters:
     from decimal import Decimal
     from pyramid.config import Configurator
 
+
     def decimal_adapter(obj, request):
         return str(obj)
 
+
     def main():
         with Configurator() as config:
-            config.include('tet.renderers.json')
+            config.include("tet.renderers.json")
 
             # Add custom adapter for Decimal
-            config.add_json_adapter(
-                for_=Decimal,
-                adapter=decimal_adapter
-            )
+            config.add_json_adapter(for_=Decimal, adapter=decimal_adapter)
 
             return config.make_wsgi_app()
 
@@ -167,18 +164,16 @@ You can register multiple JSON renderers with different names:
 
     from pyramid.renderers import JSON
 
+
     def main():
         with Configurator() as config:
-            config.include('tet.renderers.json')
+            config.include("tet.renderers.json")
 
             # Create a custom renderer for API responses
             api_renderer = JSON()
             api_renderer.add_adapter(MyModel, lambda obj, req: obj.to_dict())
 
-            config.add_json_renderer(
-                renderer=api_renderer,
-                name='api_json'
-            )
+            config.add_json_renderer(renderer=api_renderer, name="api_json")
 
             return config.make_wsgi_app()
 
@@ -186,9 +181,9 @@ Then use it in your views:
 
 .. code-block:: python
 
-    @view_config(route_name='api_endpoint', renderer='api_json')
+    @view_config(route_name="api_endpoint", renderer="api_json")
     def api_view(request):
-        return {'data': MyModel.query.all()}
+        return {"data": MyModel.query.all()}
 
 JSON in Views
 =============
@@ -200,12 +195,12 @@ Basic JSON Response
 
 .. code-block:: python
 
-    @view_config(route_name='api', renderer='json')
+    @view_config(route_name="api", renderer="json")
     def api_view(request):
         return {
-            'status': 'success',
-            'data': get_some_data(),
-            'timestamp': datetime.now()  # Automatically converted
+            "status": "success",
+            "data": get_some_data(),
+            "timestamp": datetime.now(),  # Automatically converted
         }
 
 Handling JSON Input
@@ -215,17 +210,17 @@ For processing JSON request bodies:
 
 .. code-block:: python
 
-    @view_config(route_name='api_post', request_method='POST', renderer='json')
+    @view_config(route_name="api_post", request_method="POST", renderer="json")
     def api_post_view(request):
         try:
             json_data = request.json_body
         except ValueError:
-            return {'error': 'Invalid JSON'}
+            return {"error": "Invalid JSON"}
 
         # Process the JSON data
         result = process_data(json_data)
 
-        return {'result': result}
+        return {"result": result}
 
 Error Handling
 --------------
@@ -236,12 +231,13 @@ Handle JSON-related errors gracefully:
 
     from pyramid.httpexceptions import HTTPBadRequest
 
-    @view_config(route_name='api', renderer='json')
+
+    @view_config(route_name="api", renderer="json")
     def api_view(request):
         try:
             data = request.json_body
         except ValueError as e:
-            raise HTTPBadRequest(json_body={'error': 'Invalid JSON: ' + str(e)})
+            raise HTTPBadRequest(json_body={"error": "Invalid JSON: " + str(e)})
 
         return process_data(data)
 
@@ -255,32 +251,29 @@ Performance Considerations
 
     from functools import lru_cache
 
+
     @lru_cache(maxsize=100)
     def get_cached_data():
         return expensive_data_operation()
 
-    @view_config(route_name='api', renderer='json')
+
+    @view_config(route_name="api", renderer="json")
     def api_view(request):
-        return {'data': get_cached_data()}
+        return {"data": get_cached_data()}
 
 **Large Data Sets**
   For large data sets, consider pagination or streaming:
 
 .. code-block:: python
 
-    @view_config(route_name='api', renderer='json')
+    @view_config(route_name="api", renderer="json")
     def api_view(request):
-        page = int(request.params.get('page', 1))
-        limit = int(request.params.get('limit', 20))
+        page = int(request.params.get("page", 1))
+        limit = int(request.params.get("limit", 20))
 
         data = get_paginated_data(page=page, limit=limit)
 
-        return {
-            'data': data,
-            'page': page,
-            'limit': limit,
-            'has_more': len(data) == limit
-        }
+        return {"data": data, "page": page, "limit": limit, "has_more": len(data) == limit}
 
 Best Practices
 ==============
