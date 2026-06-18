@@ -24,6 +24,13 @@ repos:
         language: script
         files: ^docs/.*\.rst$
         pass_filenames: false
+      # Compile-check every code-block example (also enforced by pytest).
+      - id: compile-doc-examples
+        name: compile-check docs examples
+        entry: tools/doc_examples.py
+        language: script
+        files: ^docs/.*\.rst$
+        pass_filenames: false
 
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks

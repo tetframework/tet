@@ -28,14 +28,19 @@ that ruff cannot parse (intentional fragments) are left untouched and reported.
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-DIRECTIVE_RE = re.compile(r"^(?P<indent>[ \t]*)\.\. code-block:: *python3?\s*$")
-OPTION_RE = re.compile(r"^(?P<indent>[ \t]*):[\w-]+:")
+# Share the RST code-block parsing with the compile-check tooling/tests.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from doc_examples import (  # noqa: E402,I001
+    DIRECTIVE_RE,
+    OPTION_RE,
+    _indent_of,
+    iter_rst_files,
+)
 
 RUFF = shutil.which("ruff")
 
@@ -54,10 +59,6 @@ def ruff_format(code: str, stdin_filename: Path) -> str | None:
         # Most commonly a syntax error: an intentionally partial snippet.
         return None
     return proc.stdout
-
-
-def _indent_of(line: str) -> int:
-    return len(line) - len(line.lstrip())
 
 
 def process_text(text: str, path: Path):
@@ -139,15 +140,6 @@ def process_text(text: str, path: Path):
         out.extend(trailing)
 
     return "\n".join(out), formatted_count, skipped
-
-
-def iter_rst_files(paths: list[str]):
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            yield from sorted(p.rglob("*.rst"))
-        elif p.suffix == ".rst":
-            yield p
 
 
 def main() -> int:
