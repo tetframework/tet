@@ -97,7 +97,7 @@ class TetAuthService(RequestScopedBaseService):
             response = requests.get(url, timeout=5)
             response.raise_for_status()
         except requests.RequestException:
-            logger.warning("Password breach check unavailable")
+            logger.warning("Password breach check unavailable", exc_info=True)
             return False
 
         for line in response.text.splitlines():
