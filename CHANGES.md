@@ -1,6 +1,25 @@
 # Changes
 
 
+2026-06-17  Antti Haapala  <antti.haapala@anttipatterns.com>
+
+    * 0.6a2: Add ``tet.security`` module with JWT-based authentication,
+      refresh tokens, TOTP multi-factor authentication, login rate limiting,
+      password management, and Pyramid security policy integration.
+      Installable via the ``tet[security]`` extra.
+    * New SQLAlchemy model mixins: ``TokenMixin``,
+      ``MultiFactorAuthenticationMethodMixin``, ``TOTPUsedCodeMixin``,
+      ``RateLimitAttemptMixin``.
+    * Pyramid 2.0 compatibility for security/authorization imports.
+    * Auth views registered via ``config.include("tet.security.authentication")``.
+    * Event system for login, logout, password change, MFA, and token
+      revocation (``tet.security.events``).
+    * TOTP replay protection via UNLOGGED tables.
+    * Login rate limiting by client IP.
+    * Breached password checking via Have I Been Pwned API (k-anonymity).
+    * Drop Python 3.8, 3.9 support. Require Python >= 3.10.
+
+
 2026-06-16  Antti Haapala  <antti.haapala@anttipatterns.com>
 
     * 0.6a1: first 0.6 alpha. Migrated to a ``src/`` layout and replaced

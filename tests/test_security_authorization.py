@@ -50,9 +50,7 @@ class TestAuthorizationPolicyWrapper:
         result = wrapper.permits(context, principals, permission)
 
         assert result is True
-        policy.permits.assert_called_once_with(
-            mock_request, context, principals, permission
-        )
+        policy.permits.assert_called_once_with(mock_request, context, principals, permission)
         mock_get_request.assert_called_once()
 
     @patch("tet.security.authorization.get_current_request")
@@ -62,9 +60,7 @@ class TestAuthorizationPolicyWrapper:
         mock_get_request.return_value = mock_request
 
         policy = MockNewAuthorizationPolicy()
-        policy.principals_allowed_by_permission = Mock(
-            return_value={"user:1", "group:admin"}
-        )
+        policy.principals_allowed_by_permission = Mock(return_value={"user:1", "group:admin"})
 
         wrapper = AuthorizationPolicyWrapper(policy)
 
@@ -130,9 +126,7 @@ class TestIncludeme:
         # Check if the policy implements the interface
         assert INewAuthorizationPolicy.providedBy(new_policy)
 
-        with patch.object(
-            SecurityConfiguratorMixin, "set_authorization_policy"
-        ) as mock_set:
+        with patch.object(SecurityConfiguratorMixin, "set_authorization_policy") as mock_set:
             # Call the directive
             set_auth_policy(pyramid_config, new_policy)
 
@@ -145,19 +139,10 @@ class TestIncludeme:
             assert call_args[0] is pyramid_config
             wrapped_policy = call_args[1]
 
-            # The check in the actual code is isinstance(policy, INewAuthorizationPolicy)
-            # but INewAuthorizationPolicy is an Interface, not a class
-            # So this will always be False for isinstance
-            # This appears to be a bug in the original code
-            # For now, test what actually happens
-            assert (
-                wrapped_policy is new_policy
-            )  # No wrapping because isinstance check fails
+            assert isinstance(wrapped_policy, AuthorizationPolicyWrapper)
 
     @patch("tet.security.authorization.SecurityConfiguratorMixin")
-    def test_set_authorization_policy_with_old_policy(
-        self, mock_security_mixin, pyramid_config
-    ):
+    def test_set_authorization_policy_with_old_policy(self, mock_security_mixin, pyramid_config):
         """Test setting authorization policy with old-style policy."""
         pyramid_config.add_directive = Mock()
         pyramid_config.maybe_dotted = Mock(side_effect=lambda x: x)
@@ -194,9 +179,7 @@ class TestIncludeme:
 
         from pyramid.config.security import SecurityConfiguratorMixin
 
-        with patch.object(
-            SecurityConfiguratorMixin, "set_authorization_policy"
-        ) as mock_set:
+        with patch.object(SecurityConfiguratorMixin, "set_authorization_policy") as mock_set:
             # Call with a dotted name
             set_auth_policy(pyramid_config, "my.module.Policy")
 
@@ -206,10 +189,7 @@ class TestIncludeme:
             # Check what was passed to set_authorization_policy
             call_args = mock_set.call_args[0]
             wrapped_policy = call_args[1]
-            # Same issue - isinstance check with Interface doesn't work as expected
-            assert (
-                wrapped_policy is resolved_policy
-            )  # No wrapping because isinstance check fails
+            assert isinstance(wrapped_policy, AuthorizationPolicyWrapper)
 
 
 class TestINewAuthorizationPolicy:
@@ -227,8 +207,6 @@ class TestINewAuthorizationPolicy:
         # The interface should have these methods defined as part of the interface
         # In Zope interfaces, methods are defined in the interface namespace
         permits_spec = INewAuthorizationPolicy.get("permits")
-        principals_spec = INewAuthorizationPolicy.get(
-            "principals_allowed_by_permission"
-        )
+        principals_spec = INewAuthorizationPolicy.get("principals_allowed_by_permission")
         assert permits_spec is not None
         assert principals_spec is not None

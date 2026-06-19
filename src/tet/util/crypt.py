@@ -42,7 +42,7 @@ def crypt(password):
     else:
         password_8bit = password
 
-    rv = password_hash.encrypt(password_8bit)
+    rv = password_hash.hash(password_8bit)
     if not isinstance(rv, str):
         rv = rv.decode()
 

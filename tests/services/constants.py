@@ -1,0 +1,5 @@
+LOGIN_ENDPOINT = "/api/v1/auth/login"
+ACCESS_TOKEN_HEADER_NAME = "Authorization"
+LONG_TERM_TOKEN_COOKIE_NAME = "refresh-token"
+ACCESS_TOKEN_COOKIE_NAME = "access-token"
+HOME_ROUTE = "/"

@@ -1,55 +1,209 @@
-"""
-Pytest configuration and fixtures for Tet framework tests.
-"""
-
-from unittest.mock import Mock
+import json
+import logging
+import os
+import typing as tp
 
 import pytest
-from pyramid import testing
-from pyramid.config import Configurator
+from pyramid.request import Request
+from pyramid.response import Response
+from tet.security.compat import Allow, Authenticated, Everyone, Deny
+from pyramid.testing import setUp, tearDown
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from tests.models.accounts import (
+    Base,
+    Token,
+    User,
+    MultiFactorAuthenticationMethod,
+    TOTPUsedCode,
+    RateLimitAttempt,
+)
+from tet.config import Configurator as tetConfigurator
+from tet.security.authentication import (
+    TokenAuthenticationPolicy,
+    AuthLoginResult,
+)
+from tet.view import view_config
+
+DB_NAME = "test_tet"
+DB_URL = os.environ.get(
+    "TET_TEST_DB_URL",
+    f"postgresql+psycopg2://test_tet:test_tet@localhost:5432/{DB_NAME}",
+)
+
+logger = logging.getLogger(__name__)
 
 
-@pytest.fixture
-def pyramid_config():
-    """Create a Pyramid configurator for testing."""
-    config = Configurator()
-    config.begin()
+def create_test_database():
+    # TODO: create the DB, but for now on we assume it must exists
+    pass
+
+
+@pytest.fixture()
+def database():
+    create_test_database()
+    yield
+    # could drop the db here, but it's probably not necessary
+
+
+@pytest.fixture()
+def db_engine(database):
+    engine = create_engine(DB_URL)
+    Base.metadata.create_all(engine)
+    yield engine
+    with engine.begin() as conn:
+        conn.execute(RateLimitAttempt.__table__.delete())
+        conn.execute(TOTPUsedCode.__table__.delete())
+    engine.dispose()
+
+
+@pytest.fixture()
+def transaction_manager(pyramid_request):
+    return pyramid_request.tm
+
+
+@pytest.fixture()
+def db_session(db_engine, pyramid_request, transaction_manager):
+    with transaction_manager:
+        session = pyramid_request.find_service(Session)
+        yield session
+
+
+def login_callback(request: Request) -> AuthLoginResult:
+    """This is just an example of a login callback. It should be defined by the pyramid app."""
+    if not request.content_length:
+        return AuthLoginResult(user_id=None)
+
+    db_session = request.find_service(Session)
+
+    payload = request.json_body
+    user_identity = payload.get("user_identity")
+    totp_token = payload.get("totp_token")
+
+    if not user_identity:
+        return AuthLoginResult(user_id=None)
+
+    user: User = db_session.query(User).filter(User.email == user_identity).one_or_none()
+    if not user or not user.validate_password(payload.get("password", "")):
+        return AuthLoginResult(
+            user_id=None,
+            user_identity=user_identity,
+        )
+
+    return AuthLoginResult(
+        user_id=user.id,
+        user_identity=user_identity,
+        totp_token=totp_token,
+    )
+
+
+def jwk_resolver(request: Request) -> str:
+    """Get it from the settings or elsewhere"""
+    return request.registry.settings["tet.security.authentication.secret"]
+
+
+@pytest.fixture()
+def pyramid_request(pyramid_app, db_engine):
+    with pyramid_app.request_context({}) as request:
+        setUp(registry=request.registry, request=request)
+        yield request
+    tearDown()
+
+
+class RootFactory(object):
+    __acl__ = [
+        (Allow, Authenticated, "view"),
+        (Allow, "group:editors", "edit"),
+        (Allow, Everyone, "login"),
+        (Deny, Everyone, "delete"),
+    ]
+
+    def __init__(self, request):
+        self.request = request
+
+
+@pytest.fixture()
+def pyramid_config(db_engine):
+    """Fixture to create and configure a Pyramid application."""
+    settings = {
+        "sqlalchemy.url": DB_URL,
+        "project_prefix": "tet",
+        "pyramid.includes": ["pyramid_tm"],
+        "tet.security.authentication.secret": "test-jwt-secret-key-at-least-32-bytes",
+    }
+    with tetConfigurator() as config:
+        config.add_settings(settings)
+        config.include("tet.sqlalchemy.simple")
+        config.include("pyramid_tm")
+        config.include("pyramid_di")
+        config.setup_sqlalchemy(engine=db_engine)
+        config.set_root_factory(RootFactory)
+        config.include("tet.security.authentication", route_prefix="/api/v1/auth")
     yield config
-    config.end()
 
 
-@pytest.fixture
-def pyramid_request():
-    """Create a dummy Pyramid request for testing."""
-    request = testing.DummyRequest()
-    request.registry = Mock()
-    return request
+@view_config(route_name="home", renderer="json", permission="view")
+def home_view(request: Request):
+    response: Response = request.response
+    response.text = json.dumps({"message": "Hello, World!"})
+    response.content_type = "application/json"
+    return response
 
 
-@pytest.fixture
-def pyramid_request_with_json():
-    """Create a dummy Pyramid request with JSON body."""
-    request = testing.DummyRequest()
-    request.json_body = {}
-    request.registry = Mock()
-    return request
+@pytest.fixture()
+def pyramid_app(pyramid_config):
+    pyramid_config.set_token_authentication(
+        long_term_token_model=Token,
+        project_prefix=pyramid_config.registry.settings["project_prefix"],
+        login_callback=login_callback,
+        jwk_resolver=jwk_resolver,
+        security_policy=TokenAuthenticationPolicy(),
+        user_model=User,
+        multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
+        totp_used_code_model=TOTPUsedCode,
+        rate_limit_model=RateLimitAttempt,
+    )
+    pyramid_config.add_route("home", "/")
+    pyramid_config.add_view(
+        home_view,
+        route_name="home",
+        renderer="json",
+        permission="view",
+    )
+    pyramid_config.scan("tests.services.security.subscribers.auth_subscribers")
+    app = pyramid_config.make_wsgi_app()
+    yield app
 
 
-@pytest.fixture
-def mock_db_session():
-    """Create a mock database session."""
-    session = Mock()
-    session.query = Mock()
-    session.add = Mock()
-    session.commit = Mock()
-    session.rollback = Mock()
-    session.flush = Mock()
-    return session
+@pytest.fixture()
+def pyramid_event_request(pyramid_event_app, db_engine):
+    with pyramid_event_app.request_context({}) as request:
+        setUp(registry=request.registry, request=request)
+        yield request
+    tearDown()
 
 
-@pytest.fixture
-def mock_model():
-    """Create a mock SQLAlchemy model."""
-    model = Mock()
-    model.__tablename__ = "test_model"
-    return model
+@pytest.fixture()
+def pyramid_event_app(pyramid_config):
+    pyramid_config.set_token_authentication(
+        long_term_token_model=Token,
+        project_prefix=pyramid_config.registry.settings["project_prefix"],
+        login_callback=login_callback,
+        jwk_resolver=jwk_resolver,
+        security_policy=TokenAuthenticationPolicy(),
+        user_model=User,
+        multi_factor_auth_method_model=MultiFactorAuthenticationMethod,
+        totp_used_code_model=TOTPUsedCode,
+        rate_limit_model=RateLimitAttempt,
+    )
+    pyramid_config.add_route("home", "/")
+    pyramid_config.add_view(
+        home_view,
+        route_name="home",
+        renderer="json",
+        permission="view",
+    )
+    pyramid_config.scan("tests.services.security.subscribers.auth_subscribers")
+    app = pyramid_config.make_wsgi_app()
+    yield app

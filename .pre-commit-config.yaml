@@ -1,10 +1,9 @@
 repos:
-  # Python formatting and linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    rev: v0.9.3  # Use the latest stable version
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix]  # Automatically fix lint errors
       - id: ruff-format
 
   # reStructuredText checking

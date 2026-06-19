@@ -5,3 +5,4 @@ tet.security.authorization module
    :members:
    :show-inheritance:
    :undoc-members:
+   :no-index:

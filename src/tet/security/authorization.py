@@ -47,7 +47,29 @@ from pyramid.interfaces import IAuthorizationPolicy
 from pyramid.threadlocal import get_current_request
 from zope.interface import Interface, implementer
 
-__all__ = ["INewAuthorizationPolicy"]
+from tet.security.compat import (  # noqa: F401 — re-exported
+    ACLHelper,
+    Allow,
+    Allowed,
+    Authenticated,
+    Denied,
+    Deny,
+    Everyone,
+    NO_PERMISSION_REQUIRED,
+)
+
+__all__ = [
+    "ACLHelper",
+    "Allow",
+    "Allowed",
+    "Authenticated",
+    "AuthorizationPolicyWrapper",
+    "Denied",
+    "Deny",
+    "Everyone",
+    "INewAuthorizationPolicy",
+    "NO_PERMISSION_REQUIRED",
+]
 
 
 class INewAuthorizationPolicy(Interface):
@@ -87,9 +109,7 @@ class AuthorizationPolicyWrapper:
     def principals_allowed_by_permission(self, context, permission):
         """Return principals allowed the permission on context."""
         request = get_current_request()
-        return self.wrapped.principals_allowed_by_permission(
-            request, context, permission
-        )
+        return self.wrapped.principals_allowed_by_permission(request, context, permission)
 
 
 def includeme(config: Configurator):
@@ -103,7 +123,7 @@ def includeme(config: Configurator):
     def set_authorization_policy(config: Configurator, policy: Any) -> None:
         """Set the authorization policy, wrapping INewAuthorizationPolicy if needed."""
         policy = config.maybe_dotted(policy)
-        if isinstance(policy, INewAuthorizationPolicy):
+        if INewAuthorizationPolicy.providedBy(policy):
             policy = AuthorizationPolicyWrapper(policy)
 
         # noinspection PyCallByClass
