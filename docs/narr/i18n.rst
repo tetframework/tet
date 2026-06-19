@@ -25,6 +25,7 @@ translation domain (your package name) automatically.
 
     from tet.config import application_factory
 
+
     @application_factory(included_features=["i18n"])
     def main(config):
         config.add_translation_dirs("myapp:locale")
@@ -56,6 +57,7 @@ pass the domain you want to use:
 .. code-block:: python
 
     from tet.i18n import configure_i18n
+
 
     def main(global_config, **settings):
         config = Configurator(settings=settings)
@@ -109,6 +111,7 @@ request's localizer.
 .. code-block:: python
 
     from pyramid.view import view_config
+
 
     @view_config(route_name="hello", renderer="json")
     def hello(request):
@@ -192,7 +195,7 @@ natural:
 
     <h1>$_("Welcome to our site!")</h1>
 
-    <button>${_("Save")}</button>
+    <button>$_("Save")</button>
 
 When you need to pass a mapping or a context, use braces to delimit the full
 expression:
@@ -232,6 +235,7 @@ globals are available inside viewlet templates with no extra work:
 .. code-block:: python
 
     from tet.viewlet import viewlet
+
 
     @viewlet("myapp:templates/sidebar.tk")
     def sidebar(request):

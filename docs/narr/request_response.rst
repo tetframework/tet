@@ -38,6 +38,7 @@ That means importing from Tet gives you the genuine Pyramid classes:
 
     # These are the very same objects Pyramid hands you:
     from pyramid.request import Request as PyramidRequest
+
     assert Request is PyramidRequest
 
 There is currently **no** ``tet.request.Request`` subclass, no overridden
@@ -111,6 +112,7 @@ Tet's feature-based configuration:
 .. code-block:: python
 
     from tet.config import application_factory
+
 
     @application_factory(included_features=["i18n"])
     def main(config):

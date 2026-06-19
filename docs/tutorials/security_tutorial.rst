@@ -18,10 +18,11 @@ Enable CSRF protection in your application:
 
     from pyramid.config import Configurator
 
+
     def main():
         with Configurator() as config:
             # Enable CSRF protection
-            config.include('tet.security.csrf')
+            config.include("tet.security.csrf")
 
             # CSRF is now required for all state-changing requests
             return config.make_wsgi_app()
@@ -37,7 +38,7 @@ Working with CSRF Tokens
 
     <form method="post" action="/submit">
         <input type="hidden" name="csrf_token"
-               value="${request.session.get_csrf_token()}">
+               value="$request.session.get_csrf_token()">
         <input type="text" name="data" placeholder="Enter data">
         <input type="submit" value="Submit">
     </form>
@@ -47,7 +48,7 @@ Working with CSRF Tokens
 .. code-block:: javascript
 
     // Set CSRF token in meta tag (in your template)
-    // <meta name="csrf-token" content="${request.session.get_csrf_token()}">
+    // <meta name="csrf-token" content="$request.session.get_csrf_token()">
 
     function setupCSRF() {
         var token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -79,14 +80,15 @@ Working with CSRF Tokens
     from pyramid.csrf import check_csrf_token
     from pyramid.httpexceptions import HTTPForbidden
 
+
     def secure_view(request):
         try:
             check_csrf_token(request)
         except HTTPForbidden:
-            return {'error': 'CSRF token missing or invalid'}
+            return {"error": "CSRF token missing or invalid"}
 
         # Process the request
-        return {'status': 'success'}
+        return {"status": "success"}
 
 Authorization System
 ====================
@@ -101,25 +103,25 @@ Creating an Authorization Policy
     from tet.security.authorization import INewAuthorizationPolicy
     from zope.interface import implementer
 
+
     @implementer(INewAuthorizationPolicy)
     class MyAuthorizationPolicy:
         def permits(self, request, context, principals, permission):
             """Check if any principal has the given permission."""
 
             # Access request data for authorization decisions
-            if permission == 'admin':
-                return 'group:admin' in principals
+            if permission == "admin":
+                return "group:admin" in principals
 
-            if permission == 'edit':
+            if permission == "edit":
                 # Context-specific authorization
-                if hasattr(context, 'owner_id'):
+                if hasattr(context, "owner_id"):
                     user_id = request.authenticated_userid
-                    return (context.owner_id == user_id or
-                           'group:admin' in principals)
+                    return context.owner_id == user_id or "group:admin" in principals
 
-            if permission == 'view':
+            if permission == "view":
                 # Public content
-                if hasattr(context, 'is_public') and context.is_public:
+                if hasattr(context, "is_public") and context.is_public:
                     return True
                 # Private content requires authentication
                 return request.authenticated_userid is not None
@@ -130,17 +132,17 @@ Creating an Authorization Policy
             """Return principals allowed for a permission."""
             allowed = set()
 
-            if permission == 'admin':
-                allowed.add('group:admin')
-            elif permission == 'edit':
-                if hasattr(context, 'owner_id'):
-                    allowed.add(f'user:{context.owner_id}')
-                allowed.add('group:admin')
-            elif permission == 'view':
-                if hasattr(context, 'is_public') and context.is_public:
-                    allowed.add('system.Everyone')
+            if permission == "admin":
+                allowed.add("group:admin")
+            elif permission == "edit":
+                if hasattr(context, "owner_id"):
+                    allowed.add(f"user:{context.owner_id}")
+                allowed.add("group:admin")
+            elif permission == "view":
+                if hasattr(context, "is_public") and context.is_public:
+                    allowed.add("system.Everyone")
                 else:
-                    allowed.add('system.Authenticated')
+                    allowed.add("system.Authenticated")
 
             return allowed
 
@@ -152,7 +154,7 @@ Registering the Authorization Policy
     def main():
         with Configurator() as config:
             # Include Tet's enhanced authorization
-            config.include('tet.security.authorization')
+            config.include("tet.security.authorization")
 
             # Register your policy
             config.set_authorization_policy(MyAuthorizationPolicy())
@@ -171,30 +173,31 @@ Using Authorization in Views
     from pyramid.httpexceptions import HTTPForbidden
     from pyramid.security import has_permission
 
-    @view_config(route_name='edit_post', renderer='json',
-                 permission='edit')
+
+    @view_config(route_name="edit_post", renderer="json", permission="edit")
     def edit_post(request):
         """This view requires 'edit' permission."""
-        post_id = request.matchdict['id']
+        post_id = request.matchdict["id"]
         post = get_post(post_id)
 
         # Permission is already checked by the view decorator
         # Update the post
-        post.title = request.json_body.get('title', post.title)
+        post.title = request.json_body.get("title", post.title)
 
-        return {'status': 'updated', 'post': post}
+        return {"status": "updated", "post": post}
 
-    @view_config(route_name='view_post', renderer='json')
+
+    @view_config(route_name="view_post", renderer="json")
     def view_post(request):
         """Manual permission checking."""
-        post_id = request.matchdict['id']
+        post_id = request.matchdict["id"]
         post = get_post(post_id)
 
         # Check permission manually
-        if not has_permission('view', post, request):
+        if not has_permission("view", post, request):
             raise HTTPForbidden("You don't have permission to view this post")
 
-        return {'post': post}
+        return {"post": post}
 
 Authentication Integration
 ==========================
@@ -208,30 +211,30 @@ Using pyramid_jwt
 
     from pyramid_jwt import create_jwt_authentication_policy
 
+
     def main():
         with Configurator() as config:
             # JWT Authentication
-            config.include('pyramid_jwt')
+            config.include("pyramid_jwt")
             config.set_jwt_authentication_policy(
-                'secret_key',
-                auth_type='Bearer',
-                callback=get_user_from_jwt
+                "secret_key", auth_type="Bearer", callback=get_user_from_jwt
             )
 
             # Tet Authorization
-            config.include('tet.security.authorization')
+            config.include("tet.security.authorization")
             config.set_authorization_policy(MyAuthorizationPolicy())
 
             return config.make_wsgi_app()
+
 
     def get_user_from_jwt(userid, request):
         """Get user principals from JWT payload."""
         # Your user lookup logic
         user = get_user(userid)
         if user and user.is_active:
-            principals = [f'user:{user.id}']
+            principals = [f"user:{user.id}"]
             if user.is_admin:
-                principals.append('group:admin')
+                principals.append("group:admin")
             return principals
         return None
 
@@ -251,10 +254,10 @@ Creating Protected Resources
         def __acl__(self):
             """Access Control List for this resource."""
             return [
-                (Allow, f'user:{self.owner_id}', 'edit'),
-                (Allow, f'user:{self.owner_id}', 'delete'),
-                (Allow, 'group:admin', ALL_PERMISSIONS),
-                (Allow, Everyone, 'view') if self.is_public else (Deny, Everyone, 'view'),
+                (Allow, f"user:{self.owner_id}", "edit"),
+                (Allow, f"user:{self.owner_id}", "delete"),
+                (Allow, "group:admin", ALL_PERMISSIONS),
+                (Allow, Everyone, "view") if self.is_public else (Deny, Everyone, "view"),
             ]
 
 Safe Data Handling
@@ -271,17 +274,18 @@ Prevent XSS attacks when embedding JSON in HTML:
 
     from tet.util.json import js_safe_dumps
 
+
     def user_profile_page(request):
         user_data = {
-            'name': request.user.name,
-            'bio': request.user.bio,  # Could contain HTML
-            'preferences': request.user.preferences
+            "name": request.user.name,
+            "bio": request.user.bio,  # Could contain HTML
+            "preferences": request.user.preferences,
         }
 
         # Safe for embedding in HTML/JavaScript
         safe_json = js_safe_dumps(user_data)
 
-        return {'user_json': safe_json}
+        return {"user_json": safe_json}
 
 In your template:
 
@@ -289,7 +293,7 @@ In your template:
 
     <script>
         // This is safe from XSS attacks
-        var userData = ${user_json|n};
+        var userData = $literal(user_json);
 
         // Use the data safely
         document.getElementById('user-name').textContent = userData.name;
@@ -303,6 +307,7 @@ Input Validation and Sanitization
     import re
     from html import escape
 
+
     def sanitize_user_input(data):
         """Sanitize user input data."""
         sanitized = {}
@@ -310,7 +315,7 @@ Input Validation and Sanitization
         for key, value in data.items():
             if isinstance(value, str):
                 # Remove potentially dangerous characters
-                value = re.sub(r'[<>"\']', '', value)
+                value = re.sub(r'[<>"\']', "", value)
                 # Escape HTML entities
                 value = escape(value)
                 # Limit length
@@ -320,8 +325,13 @@ Input Validation and Sanitization
 
         return sanitized
 
-    @view_config(route_name='update_profile', request_method='POST',
-                 renderer='json', permission='edit')
+
+    @view_config(
+        route_name="update_profile",
+        request_method="POST",
+        renderer="json",
+        permission="edit",
+    )
     def update_profile(request):
         # Sanitize input data
         raw_data = request.json_body
@@ -329,10 +339,10 @@ Input Validation and Sanitization
 
         # Update user profile with clean data
         user = request.user
-        user.bio = clean_data.get('bio', user.bio)
-        user.website = clean_data.get('website', user.website)
+        user.bio = clean_data.get("bio", user.bio)
+        user.website = clean_data.get("website", user.website)
 
-        return {'status': 'updated'}
+        return {"status": "updated"}
 
 Session Security
 ================
@@ -346,18 +356,20 @@ Session Configuration
 
     def main(global_config, **settings):
         # Production session settings
-        settings.update({
-            'session.secret': 'your-very-secure-secret-key',
-            'session.secure': True,      # HTTPS only
-            'session.httponly': True,    # No JavaScript access
-            'session.samesite': 'Strict', # CSRF protection
-            'session.timeout': 3600,     # 1 hour timeout
-            'session.cookie_max_age': 86400,  # 24 hours
-        })
+        settings.update(
+            {
+                "session.secret": "your-very-secure-secret-key",
+                "session.secure": True,  # HTTPS only
+                "session.httponly": True,  # No JavaScript access
+                "session.samesite": "Strict",  # CSRF protection
+                "session.timeout": 3600,  # 1 hour timeout
+                "session.cookie_max_age": 86400,  # 24 hours
+            }
+        )
 
         with Configurator(settings=settings) as config:
-            config.include('pyramid_session')
-            config.include('tet.security.csrf')
+            config.include("pyramid_session")
+            config.include("tet.security.csrf")
 
             return config.make_wsgi_app()
 
@@ -378,18 +390,21 @@ Simple Rate Limiting
     # Simple in-memory rate limiter (use Redis in production)
     request_counts = {}
 
+
     def rate_limit(max_requests=10, window=60):
         """Rate limiting decorator."""
+
         def decorator(func):
             @wraps(func)
             def wrapper(request):
-                client_ip = request.environ.get('REMOTE_ADDR')
+                client_ip = request.environ.get("REMOTE_ADDR")
                 current_time = time()
 
                 # Clean old entries
                 cutoff = current_time - window
                 request_counts[client_ip] = [
-                    timestamp for timestamp in request_counts.get(client_ip, [])
+                    timestamp
+                    for timestamp in request_counts.get(client_ip, [])
                     if timestamp > cutoff
                 ]
 
@@ -401,13 +416,16 @@ Simple Rate Limiting
                 request_counts[client_ip].append(current_time)
 
                 return func(request)
+
             return wrapper
+
         return decorator
 
-    @view_config(route_name='api_endpoint', renderer='json')
+
+    @view_config(route_name="api_endpoint", renderer="json")
     @rate_limit(max_requests=5, window=60)  # 5 requests per minute
     def api_endpoint(request):
-        return {'data': 'sensitive_information'}
+        return {"data": "sensitive_information"}
 
 Security Headers
 ================
@@ -426,25 +444,27 @@ Security Headers Middleware
             response = handler(request)
 
             # Security headers
-            response.headers.update({
-                'X-Content-Type-Options': 'nosniff',
-                'X-Frame-Options': 'DENY',
-                'X-XSS-Protection': '1; mode=block',
-                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-                'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'",
-                'Referrer-Policy': 'strict-origin-when-cross-origin'
-            })
+            response.headers.update(
+                {
+                    "X-Content-Type-Options": "nosniff",
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "1; mode=block",
+                    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+                    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'",
+                    "Referrer-Policy": "strict-origin-when-cross-origin",
+                }
+            )
 
             return response
 
         return security_headers_tween
 
+
     def main():
         with Configurator() as config:
             # Add security headers tween
             config.add_tween(
-                'myapp.security_headers_tween_factory',
-                under='pyramid_tm.tm_tween_factory'
+                "myapp.security_headers_tween_factory", under="pyramid_tm.tm_tween_factory"
             )
 
             return config.make_wsgi_app()
@@ -461,12 +481,11 @@ Testing CSRF Protection
 
     def test_csrf_protection(app):
         # GET request should work
-        response = app.get('/form')
+        response = app.get("/form")
         assert response.status_code == 200
 
         # POST without CSRF token should fail
-        response = app.post('/submit', {'data': 'test'},
-                          expect_errors=True)
+        response = app.post("/submit", {"data": "test"}, expect_errors=True)
         assert response.status_code == 403
 
         # POST with CSRF token should work
@@ -485,13 +504,13 @@ Testing Authorization
         request = DummyRequest()
 
         # Test admin permission
-        assert policy.permits(request, None, ['group:admin'], 'admin')
-        assert not policy.permits(request, None, ['user:123'], 'admin')
+        assert policy.permits(request, None, ["group:admin"], "admin")
+        assert not policy.permits(request, None, ["user:123"], "admin")
 
         # Test context-specific permission
         context = Mock(owner_id=123, is_public=False)
-        assert policy.permits(request, context, ['user:123'], 'edit')
-        assert not policy.permits(request, context, ['user:456'], 'edit')
+        assert policy.permits(request, context, ["user:123"], "edit")
+        assert not policy.permits(request, context, ["user:456"], "edit")
 
 Security Checklist
 ==================

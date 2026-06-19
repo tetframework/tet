@@ -101,6 +101,7 @@ independently:
 
     from pyramid.config import Configurator
 
+
     def main(global_config, **settings):
         with Configurator(settings=settings) as config:
             # Include only the Tet features you need

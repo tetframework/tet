@@ -155,7 +155,7 @@ list, the equivalent explicit include is:
 
 .. code-block:: python
 
-    config.include("pyramid_di")        # or: config.include("tet.services")
+    config.include("pyramid_di")  # or: config.include("tet.services")
     config.scan_services("myapp.services")
 
 You can also register services imperatively, without the ``@service()``
@@ -167,9 +167,11 @@ interface or third-party type:
     # Register an already-constructed instance under a type/name.
     config.register_service(my_instance, SomeType)
 
+
     # Register a factory called with (context, request) to build the service.
     def make_session_service(context, request):
         return build_session(request)
+
 
     config.register_service_factory(make_session_service, Session)
 

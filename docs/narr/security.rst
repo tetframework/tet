@@ -18,9 +18,10 @@ To enable CSRF protection in your application:
 
     from pyramid.config import Configurator
 
+
     def main():
         with Configurator() as config:
-            config.include('tet.security.csrf')
+            config.include("tet.security.csrf")
             # CSRF protection is now enabled by default
             # with require_csrf=True
 
@@ -36,7 +37,7 @@ In your templates, include CSRF tokens in forms:
 .. code-block:: html
 
     <form method="post" action="/submit">
-        <input type="hidden" name="csrf_token" value="${request.session.get_csrf_token()}">
+        <input type="hidden" name="csrf_token" value="$request.session.get_csrf_token()">
         <!-- Your form fields -->
         <input type="submit" value="Submit">
     </form>
@@ -66,12 +67,13 @@ Traditional Pyramid authorization policies receive limited context. Tet's ``INew
     from tet.security.authorization import INewAuthorizationPolicy
     from zope.interface import implementer
 
+
     @implementer(INewAuthorizationPolicy)
     class MyAuthorizationPolicy:
         def permits(self, request, context, principals, permission):
             # Access to request object for richer authorization logic
-            if request.path.startswith('/admin/'):
-                return 'admin' in principals
+            if request.path.startswith("/admin/"):
+                return "admin" in principals
             return True
 
         def principals_allowed_by_permission(self, request, context, permission):
@@ -89,9 +91,10 @@ Register your authorization policy with Tet:
 
     from pyramid.config import Configurator
 
+
     def main():
         with Configurator() as config:
-            config.include('tet.security.authorization')
+            config.include("tet.security.authorization")
             # set_authorization_policy is added by the include above
             config.set_authorization_policy(MyAuthorizationPolicy())
 
@@ -122,6 +125,7 @@ The ``SQLARootFactory`` properly handles SQL exceptions and converts them to app
     from tet.sqlalchemy.factory import SQLARootFactory
     from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
     from sqlalchemy.exc import DataError
+
 
     class MyRootFactory(SQLARootFactory):
         def supplier(self, item):
@@ -163,7 +167,7 @@ Use Tet's JSON utilities to prevent XSS when embedding JSON in HTML:
     safe_json = js_safe_dumps(user_data)
 
     # In your template:
-    # <script>var userData = ${safe_json|n};</script>
+    # <script>var userData = $literal(safe_json);</script>
 
 The ``js_safe_dumps`` function escapes dangerous characters:
 
@@ -206,10 +210,10 @@ Security Considerations
 .. code-block:: python
 
     settings = {
-        'session.secret': 'your-secret-key',
-        'session.secure': True,  # HTTPS only
-        'session.httponly': True,  # No JavaScript access
-        'session.samesite': 'Strict',  # CSRF protection
+        "session.secret": "your-secret-key",
+        "session.secure": True,  # HTTPS only
+        "session.httponly": True,  # No JavaScript access
+        "session.samesite": "Strict",  # CSRF protection
     }
 
 **HTTPS in Production**

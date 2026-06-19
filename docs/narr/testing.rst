@@ -52,13 +52,13 @@ Two markers are available:
 
     import pytest
 
+
     @pytest.mark.slow
-    def test_expensive_operation():
-        ...
+    def test_expensive_operation(): ...
+
 
     @pytest.mark.integration
-    def test_full_request_cycle(app):
-        ...
+    def test_full_request_cycle(app): ...
 
 Coverage is available through ``pytest-cov`` (installed by both the ``test``
 and ``dev`` extras)::
@@ -149,9 +149,7 @@ module sets ``require_csrf=True``:
 
         includeme(pyramid_config)
 
-        pyramid_config.set_default_csrf_options.assert_called_once_with(
-            require_csrf=True
-        )
+        pyramid_config.set_default_csrf_options.assert_called_once_with(require_csrf=True)
 
 Testing Views
 =============

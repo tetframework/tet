@@ -23,6 +23,37 @@ Let's create a simple web application using Tet's enhanced features.
 Basic Application Structure
 ---------------------------
 
+You *can* keep an entire Tet application in a single module -- it is the
+quickest way to get a feel for the framework, and this tutorial does exactly
+that to keep each step short. A single file is perfectly fine for spikes,
+examples, and very small services.
+
+For anything you intend to maintain, though, organise the application as a
+Python **package** instead of a single file or one growing module. A package
+gives you a place for each concern (models, views, services, templates,
+migrations, tests) and makes ``config.scan()`` and asset specifications such as
+``"myapp:templates/home.tk"`` resolve cleanly. A typical layout looks like:
+
+.. code-block:: text
+
+    myapp/
+        myapp/
+            __init__.py        # main() application factory
+            models.py          # or a models/ package
+            views.py           # or a views/ package
+            services.py
+            templates/
+                home.tk
+            static/
+        development.ini
+        pyproject.toml
+        tests/
+
+The examples below use a flat ``app.py``/``models.py`` for brevity; when you
+move to a package, the same code lives in ``myapp/__init__.py``,
+``myapp/models.py`` and so on, and you start the app through the ``.ini`` file
+with ``pserve`` rather than a ``__main__`` block.
+
 Create a new directory for your project and add the following files:
 
 **app.py**
@@ -32,30 +63,35 @@ Create a new directory for your project and add the following files:
     from tet.config import application_factory, ALL_FEATURES
     from pyramid.response import Response
 
+
     def hello_world(request):
-        return Response('Hello, Tet!')
+        return Response("Hello, Tet!")
+
 
     def json_api(request):
         return {
-            'message': 'Hello from Tet API!',
-            'features': ['CSRF Protection', 'Safe JSON', 'Enhanced Auth']
+            "message": "Hello from Tet API!",
+            "features": ["CSRF Protection", "Safe JSON", "Enhanced Auth"],
         }
+
 
     @application_factory(included_features=ALL_FEATURES)
     def main(config):
         """Tet application factory."""
         # Add routes
-        config.add_route('home', '/')
-        config.add_route('api', '/api')
+        config.add_route("home", "/")
+        config.add_route("api", "/api")
 
         # Add views
-        config.add_view(hello_world, route_name='home')
-        config.add_view(json_api, route_name='api', renderer='json')
+        config.add_view(hello_world, route_name="home")
+        config.add_view(json_api, route_name="api", renderer="json")
 
-    if __name__ == '__main__':
+
+    if __name__ == "__main__":
         from wsgiref.simple_server import make_server
+
         app = main({})  # Empty global_config
-        server = make_server('0.0.0.0', 6543, app)
+        server = make_server("0.0.0.0", 6543, app)
         print("Server running on http://localhost:6543")
         server.serve_forever()
 
@@ -77,29 +113,31 @@ Let's enhance our application with database support using SQLAlchemy.
     from sqlalchemy import Column, Integer, String, DateTime, create_engine
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import sessionmaker
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     Base = declarative_base()
 
+
     class User(Base):
-        __tablename__ = 'users'
+        __tablename__ = "users"
 
         id = Column(Integer, primary_key=True)
         name = Column(String(50), nullable=False)
         email = Column(String(100), unique=True, nullable=False)
-        created = Column(DateTime, default=datetime.utcnow)
+        created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
         def __json__(self, request):
             """JSON serialization for Tet's JSON renderer."""
             return {
-                'id': self.id,
-                'name': self.name,
-                'email': self.email,
-                'created': self.created  # Automatically converted by Tet
+                "id": self.id,
+                "name": self.name,
+                "email": self.email,
+                "created": self.created,  # Automatically converted by Tet
             }
 
+
     # Database setup
-    engine = create_engine('sqlite:///tutorial.db', echo=True)
+    engine = create_engine("sqlite:///tutorial.db", echo=True)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
 
@@ -113,8 +151,10 @@ Let's enhance our application with database support using SQLAlchemy.
     from sqlalchemy.orm import Session
     from models import User
 
+
     def hello_world(request):
-        return Response('Hello, Tet!')
+        return Response("Hello, Tet!")
+
 
     class UserViews:
         """User management views."""
@@ -127,45 +167,49 @@ Let's enhance our application with database support using SQLAlchemy.
             # Transaction managed automatically by pyramid_tm
 
             # Create a new user
-            user = User(
-                name='John Doe',
-                email='john@example.com'
-            )
+            user = User(name="John Doe", email="john@example.com")
             self.dbsession.add(user)
             # No need to commit - pyramid_tm handles transactions automatically
 
-            return {'message': 'User created', 'user': user}
+            return {"message": "User created", "user": user}
 
         def list_users(self, request):
             # Use the autowired database session
             users = self.dbsession.query(User).all()
-            return {'users': users}
+            return {"users": users}
+
 
     @application_factory(included_features=ALL_FEATURES)
     def main(config):
         """Tet application factory with database support."""
         # Setup SQLAlchemy with automatic session management
-        config.include('tet.sqlalchemy.simple')
+        config.include("tet.sqlalchemy.simple")
         config.setup_sqlalchemy()
 
         # Routes
-        config.add_route('home', '/')
-        config.add_route('create_user', '/users/create')
-        config.add_route('list_users', '/users')
+        config.add_route("home", "/")
+        config.add_route("create_user", "/users/create")
+        config.add_route("list_users", "/users")
 
         # Views
-        config.add_view(hello_world, route_name='home')
+        config.add_view(hello_world, route_name="home")
 
         # Register class-based views
         user_views = UserViews()
-        config.add_view(user_views.create_user, route_name='create_user',
-                      request_method='POST', renderer='json')
-        config.add_view(user_views.list_users, route_name='list_users', renderer='json')
+        config.add_view(
+            user_views.create_user,
+            route_name="create_user",
+            request_method="POST",
+            renderer="json",
+        )
+        config.add_view(user_views.list_users, route_name="list_users", renderer="json")
 
-    if __name__ == '__main__':
+
+    if __name__ == "__main__":
         from wsgiref.simple_server import make_server
+
         app = main({})
-        server = make_server('0.0.0.0', 6543, app)
+        server = make_server("0.0.0.0", 6543, app)
         print("Server running on http://localhost:6543")
         server.serve_forever()
 
@@ -181,6 +225,7 @@ Let's add some security features to our application.
     from pyramid.httpexceptions import HTTPForbidden
     from pyramid.csrf import check_csrf_token
 
+
     def secure_create_user(request):
         # CSRF protection is automatically enabled
         # This view will require CSRF token for POST requests
@@ -189,29 +234,29 @@ Let's add some security features to our application.
             # Validate CSRF token (optional explicit check)
             check_csrf_token(request)
         except HTTPForbidden:
-            return {'error': 'CSRF token missing or invalid'}
+            return {"error": "CSRF token missing or invalid"}
 
-        session = request.find_service(name='dbsession')
+        session = request.find_service(name="dbsession")
 
         # Get data from request
-        name = request.json_body.get('name')
-        email = request.json_body.get('email')
+        name = request.json_body.get("name")
+        email = request.json_body.get("email")
 
         if not name or not email:
-            return {'error': 'Name and email are required'}
+            return {"error": "Name and email are required"}
 
         # Create user
         user = User(name=name, email=email)
         session.add(user)
         session.commit()
 
-        return {'message': 'User created successfully', 'user': user}
+        return {"message": "User created successfully", "user": user}
 
 **Safe JSON for Frontend**
 
 Create a template that safely embeds JSON:
 
-**templates/users.pt** (Chameleon template)
+**templates/users.tk** (Tonnikala template)
 
 .. code-block:: html
 
@@ -219,7 +264,7 @@ Create a template that safely embeds JSON:
     <html>
     <head>
         <title>Users</title>
-        <meta name="csrf-token" content="${request.session.get_csrf_token()}">
+        <meta name="csrf-token" content="$request.session.get_csrf_token()">
     </head>
     <body>
         <h1>Users</h1>
@@ -227,7 +272,7 @@ Create a template that safely embeds JSON:
 
         <script>
             // Safe JSON embedding using Tet's js_safe_dumps
-            var users = ${users_json|n};
+            var users = $literal(users_json);
 
             // Display users
             var container = document.getElementById('users');
@@ -246,8 +291,9 @@ Create a template that safely embeds JSON:
 
     from tet.util.json import js_safe_dumps
 
+
     def users_page(request):
-        session = request.find_service(name='dbsession')
+        session = request.find_service(name="dbsession")
         users = session.query(User).all()
 
         # Convert users to JSON-serializable format
@@ -256,7 +302,7 @@ Create a template that safely embeds JSON:
         # Safe JSON for template embedding
         users_json = js_safe_dumps(users_data)
 
-        return {'users_json': users_json}
+        return {"users_json": users_json}
 
 Adding Testing
 ==============
@@ -271,6 +317,7 @@ Let's add some tests for our application.
     from pyramid.testing import DummyRequest
     from models import User, Session, Base, engine
 
+
     @pytest.fixture
     def dbsession():
         """Create test database session."""
@@ -282,29 +329,28 @@ Let's add some tests for our application.
         session.close()
         Base.metadata.drop_all(engine)
 
+
     def test_create_user(dbsession):
         from app import create_user
 
         # Mock request with database session
         request = DummyRequest()
         request.find_service = lambda name: dbsession
-        request.json_body = {
-            'name': 'Test User',
-            'email': 'test@example.com'
-        }
+        request.json_body = {"name": "Test User", "email": "test@example.com"}
 
         # Test the view
         result = create_user(request)
 
-        assert result['message'] == 'User created'
-        assert result['user'].name == 'Test User'
+        assert result["message"] == "User created"
+        assert result["user"].name == "Test User"
+
 
     def test_list_users(dbsession):
         from app import list_users
 
         # Create test data
-        user1 = User(name='User 1', email='user1@example.com')
-        user2 = User(name='User 2', email='user2@example.com')
+        user1 = User(name="User 1", email="user1@example.com")
+        user2 = User(name="User 2", email="user2@example.com")
         dbsession.add_all([user1, user2])
         dbsession.commit()
 
@@ -315,7 +361,7 @@ Let's add some tests for our application.
         # Test the view
         result = list_users(request)
 
-        assert len(result['users']) == 2
+        assert len(result["users"]) == 2
 
 Run the tests::
 
@@ -381,10 +427,10 @@ For production deployment, create a proper configuration file.
     import os
 
     here = os.path.dirname(os.path.abspath(__file__))
-    config_file = os.path.join(here, 'production.ini')
+    config_file = os.path.join(here, "production.ini")
 
     setup_logging(config_file)
-    application = get_app(config_file, 'main')
+    application = get_app(config_file, "main")
 
 Deploy with gunicorn::
 

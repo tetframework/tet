@@ -13,6 +13,24 @@ repos:
       - id: rstcheck
         additional_dependencies: ['rstcheck[sphinx,toml]']
 
+  # Keep the Python code-block examples in the docs ruff-formatted.
+  # Run tools/format_doc_examples.py (no --check) to apply the fixes.
+  - repo: local
+    hooks:
+      - id: format-doc-examples
+        name: ruff-format docs examples
+        entry: tools/format_doc_examples.py --check
+        language: script
+        files: ^docs/.*\.rst$
+        pass_filenames: false
+      # Compile-check every code-block example (also enforced by pytest).
+      - id: compile-doc-examples
+        name: compile-check docs examples
+        entry: tools/doc_examples.py
+        language: script
+        files: ^docs/.*\.rst$
+        pass_filenames: false
+
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
